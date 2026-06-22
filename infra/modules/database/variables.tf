@@ -1,10 +1,7 @@
-variable "project_name" {
-  description = "Project name"
-  type        = string
-  default     = "spectrl"
+variable "project_id" {
+  type = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
+variable "region" {
+  type = string
 }

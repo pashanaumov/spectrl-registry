@@ -1,9 +1,7 @@
-output "bucket_name" {
-  description = "Name of the S3 bucket"
-  value       = aws_s3_bucket.registry.id
+output "specs_bucket_name" {
+  value = google_storage_bucket.specs.name
 }
 
-output "cloudfront_url" {
-  description = "Full HTTPS URL of the CloudFront distribution"
-  value       = "https://${aws_cloudfront_distribution.registry.domain_name}"
+output "functions_source_bucket_name" {
+  value = google_storage_bucket.functions_source.name
 }

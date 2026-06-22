@@ -1,38 +1,61 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { handler } from './index';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 
-const ddbMock = mockClient(DynamoDBDocumentClient);
-const s3Mock = mockClient(S3Client);
+vi.mock('./helpers/dynamodb', () => ({ storeSpecMetadata: vi.fn() }));
+vi.mock('./helpers/s3', () => ({ uploadToS3: vi.fn(), uploadToStorage: vi.fn() }));
+
+import { storeSpecMetadata } from './helpers/dynamodb';
+import { uploadToStorage } from './helpers/s3';
+
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function makeReq(overrides: Partial<{ params: any; query: any; headers: any; body: any }> = {}) {
+  return {
+    params: overrides.params || {},
+    query: overrides.query || {},
+    headers: overrides.headers || {},
+    body: overrides.body || null,
+    // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  } as any;
+}
+
+function makeRes() {
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  const res: any = {};
+  let _status = 200;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  let _body: any = null;
+  res.status = (code: number) => {
+    _status = code;
+    return res;
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  res.json = (data: any) => {
+    _body = data;
+    return res;
+  };
+  res.getStatus = () => _status;
+  res.getBody = () => _body;
+  return res;
+}
 
 describe('publish-spec Lambda', () => {
   beforeEach(() => {
-    ddbMock.reset();
-    s3Mock.reset();
     vi.clearAllMocks();
-
-    // Set environment variables
     process.env.BUCKET_NAME = 'test-bucket';
     process.env.TABLE_NAME = 'test-table';
   });
 
   it('should publish spec successfully (happy path)', async () => {
-    // Mock GitHub API
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    // Mock AWS
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/test-spec',
           version: '1.0.0',
@@ -41,34 +64,27 @@ describe('publish-spec Lambda', () => {
           files: ['README.md'],
           dependencies: {},
         },
-        files: {
-          'README.md': '# Test\n\nContent',
-        },
-      }),
-    };
+        files: { 'README.md': '# Test\n\nContent' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.message).toContain('Published');
-    expect(body.url).toContain('testuser/test-spec');
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().message).toContain('Published');
+    expect(res.getBody().url).toContain('testuser/test-spec');
   });
 
   it('should reject request without authorization (sad path)', async () => {
-    const event: Partial<APIGatewayProxyEvent> = {
+    const req = makeReq({
       headers: {},
-      body: JSON.stringify({
-        manifest: { name: 'test/spec', version: '1.0.0' },
-        files: {},
-      }),
-    };
+      body: { manifest: { name: 'test/spec', version: '1.0.0' }, files: {} },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(401);
-    const body = JSON.parse(result.body);
-    expect(body.error).toContain('Authorization');
+    expect(res.getStatus()).toBe(401);
+    expect(res.getBody().error).toContain('Authorization');
   });
 
   it('should reject invalid manifest (sad path)', async () => {
@@ -77,34 +93,28 @@ describe('publish-spec Lambda', () => {
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
-        manifest: { name: 'invalid' }, // Missing required fields
-        files: {},
-      }),
-    };
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: { manifest: { name: 'invalid' }, files: {} },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    // Zod validation errors return 400
-    expect(result.statusCode).toBe(400);
-    const body = JSON.parse(result.body);
-    expect(body.error).toBeDefined();
+    expect(res.getStatus()).toBe(400);
+    expect(res.getBody().error).toBeDefined();
   });
 
-  it('should store type "power" in DynamoDB when publishing a power', async () => {
+  it('should store type "power" when publishing a power', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/test-power',
           version: '1.0.0',
@@ -113,34 +123,27 @@ describe('publish-spec Lambda', () => {
           files: ['index.md'],
           dependencies: {},
         },
-        files: {
-          'index.md': '# Test Power\n\nInstructions here.',
-        },
-      }),
-    };
+        files: { 'index.md': '# Test Power\n\nInstructions here.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-
-    // Verify the DynamoDB PutCommand received type: "power"
-    const putCalls = ddbMock.commandCalls(PutCommand);
-    expect(putCalls).toHaveLength(1);
-    expect(putCalls[0].args[0].input.Item?.type).toBe('power');
+    expect(res.getStatus()).toBe(200);
+    expect(vi.mocked(storeSpecMetadata).mock.calls[0][0].type).toBe('power');
   });
 
-  it('should default type to "spec" in DynamoDB when type is omitted', async () => {
+  it('should default type to "spec" when type is omitted', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/test-spec',
           version: '1.0.0',
@@ -148,20 +151,14 @@ describe('publish-spec Lambda', () => {
           files: ['index.md'],
           dependencies: {},
         },
-        files: {
-          'index.md': '# Test Spec\n\nContent here.',
-        },
-      }),
-    };
+        files: { 'index.md': '# Test Spec\n\nContent here.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-
-    // Verify the DynamoDB PutCommand received the default type: "spec"
-    const putCalls = ddbMock.commandCalls(PutCommand);
-    expect(putCalls).toHaveLength(1);
-    expect(putCalls[0].args[0].input.Item?.type).toBe('spec');
+    expect(res.getStatus()).toBe(200);
+    expect(vi.mocked(storeSpecMetadata).mock.calls[0][0].type).toBe('spec');
   });
 
   it('should return 400 when type is an invalid value', async () => {
@@ -170,9 +167,9 @@ describe('publish-spec Lambda', () => {
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/test-spec',
           version: '1.0.0',
@@ -181,56 +178,43 @@ describe('publish-spec Lambda', () => {
           files: ['index.md'],
           dependencies: {},
         },
-        files: {
-          'index.md': '# Test\n\nContent.',
-        },
-      }),
-    };
+        files: { 'index.md': '# Test\n\nContent.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(400);
-    const body = JSON.parse(result.body);
-    expect(body.error).toBeDefined();
+    expect(res.getStatus()).toBe(400);
+    expect(res.getBody().error).toBeDefined();
   });
 
-  it('should store deps field in DynamoDB when provided', async () => {
+  it('should store deps field when provided', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/api-spec',
           version: '1.0.0',
           description: 'API spec with dependencies',
           type: 'spec',
           files: ['index.md'],
-          deps: {
-            'shared-errors': '1.0.0',
-            'base-types': '2.0.0',
-          },
+          deps: { 'shared-errors': '1.0.0', 'base-types': '2.0.0' },
         },
-        files: {
-          'index.md': '# API Spec\n\nContent here.',
-        },
-      }),
-    };
+        files: { 'index.md': '# API Spec\n\nContent here.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-
-    // Verify the DynamoDB PutCommand received the deps field
-    const putCalls = ddbMock.commandCalls(PutCommand);
-    expect(putCalls).toHaveLength(1);
-    expect(putCalls[0].args[0].input.Item?.deps).toEqual({
+    expect(res.getStatus()).toBe(200);
+    expect(vi.mocked(storeSpecMetadata).mock.calls[0][0].deps).toEqual({
       'shared-errors': '1.0.0',
       'base-types': '2.0.0',
     });
@@ -241,35 +225,27 @@ describe('publish-spec Lambda', () => {
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/simple-spec',
           version: '1.0.0',
           description: 'Simple spec without dependencies',
           type: 'spec',
           files: ['index.md'],
-          // No deps field
         },
-        files: {
-          'index.md': '# Simple Spec\n\nContent here.',
-        },
-      }),
-    };
+        files: { 'index.md': '# Simple Spec\n\nContent here.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-
-    // Verify the DynamoDB PutCommand - deps should be undefined
-    const putCalls = ddbMock.commandCalls(PutCommand);
-    expect(putCalls).toHaveLength(1);
-    expect(putCalls[0].args[0].input.Item?.deps).toBeUndefined();
+    expect(res.getStatus()).toBe(200);
+    expect(vi.mocked(storeSpecMetadata).mock.calls[0][0].deps).toBeUndefined();
   });
 
   it('should handle empty deps object', async () => {
@@ -277,13 +253,12 @@ describe('publish-spec Lambda', () => {
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(storeSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(uploadToStorage).mockResolvedValue(undefined as any);
 
-    ddbMock.on(PutCommand).resolves({});
-    s3Mock.on(PutObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      body: JSON.stringify({
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      body: {
         manifest: {
           name: 'testuser/empty-deps-spec',
           version: '1.0.0',
@@ -292,19 +267,13 @@ describe('publish-spec Lambda', () => {
           files: ['index.md'],
           deps: {},
         },
-        files: {
-          'index.md': '# Empty Deps Spec\n\nContent here.',
-        },
-      }),
-    };
+        files: { 'index.md': '# Empty Deps Spec\n\nContent here.' },
+      },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-
-    // Verify the DynamoDB PutCommand received empty deps object
-    const putCalls = ddbMock.commandCalls(PutCommand);
-    expect(putCalls).toHaveLength(1);
-    expect(putCalls[0].args[0].input.Item?.deps).toEqual({});
+    expect(res.getStatus()).toBe(200);
+    expect(vi.mocked(storeSpecMetadata).mock.calls[0][0].deps).toEqual({});
   });
 });

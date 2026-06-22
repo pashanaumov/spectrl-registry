@@ -1,91 +1,100 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { handler } from './index';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 
-const secretsMock = mockClient(SecretsManagerClient);
-const ddbMock = mockClient(DynamoDBDocumentClient);
+vi.mock('./helpers/credentials', () => ({
+  getGithubOAuthCredentials: vi.fn(),
+  exchangeCodeForToken: vi.fn(),
+  getGitHubUser: vi.fn(),
+}));
+vi.mock('./helpers/dynamoDb', () => ({ storeUser: vi.fn() }));
+
+import {
+  getGithubOAuthCredentials,
+  exchangeCodeForToken,
+  getGitHubUser,
+} from './helpers/credentials';
+import { storeUser } from './helpers/dynamoDb';
+
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function makeReq(overrides: Partial<{ params: any; query: any; headers: any; body: any }> = {}) {
+  return {
+    params: overrides.params || {},
+    query: overrides.query || {},
+    headers: overrides.headers || {},
+    body: overrides.body || null,
+    // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  } as any;
+}
+
+function makeRes() {
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  const res: any = {};
+  let _status = 200;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  let _body: any = null;
+  res.status = (code: number) => {
+    _status = code;
+    return res;
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  res.json = (data: any) => {
+    _body = data;
+    return res;
+  };
+  res.getStatus = () => _status;
+  res.getBody = () => _body;
+  return res;
+}
 
 describe('auth-exchange Lambda', () => {
   beforeEach(() => {
-    secretsMock.reset();
-    ddbMock.reset();
     vi.clearAllMocks();
-
-    process.env.SECRETS_ARN = 'arn:aws:secretsmanager:test';
-    process.env.USERS_TABLE = 'test-users-table';
   });
 
   it('should exchange code for token (happy path)', async () => {
-    // Mock Secrets Manager
-    secretsMock.on(GetSecretValueCommand).resolves({
-      SecretString: JSON.stringify({
-        clientId: 'test-client-id',
-        clientSecret: 'test-client-secret',
-      }),
-    });
+    vi.mocked(getGithubOAuthCredentials).mockResolvedValue({
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+    } as any);
+    vi.mocked(exchangeCodeForToken).mockResolvedValue('gho_test_token' as any);
+    vi.mocked(getGitHubUser).mockResolvedValue({
+      githubId: 123,
+      username: 'testuser',
+      email: 'test@example.com',
+    } as any);
+    vi.mocked(storeUser).mockResolvedValue(undefined as any);
 
-    // Mock GitHub OAuth exchange
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ access_token: 'gho_test_token' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
-      });
+    const req = makeReq({ body: { code: 'test-oauth-code' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    // Mock DynamoDB
-    ddbMock.on(PutCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      body: JSON.stringify({ code: 'test-oauth-code' }),
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.token).toBe('gho_test_token');
-    expect(body.username).toBe('testuser');
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().token).toBe('gho_test_token');
+    expect(res.getBody().username).toBe('testuser');
   });
 
   it('should reject missing code (sad path)', async () => {
-    const event: Partial<APIGatewayProxyEvent> = {
-      body: JSON.stringify({}),
-    };
+    const req = makeReq({ body: {} });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(400);
-    const body = JSON.parse(result.body);
-    expect(body.error).toBeDefined();
+    expect(res.getStatus()).toBe(400);
+    expect(res.getBody().error).toBeDefined();
   });
 
   it('should handle GitHub API failure (sad path)', async () => {
-    secretsMock.on(GetSecretValueCommand).resolves({
-      SecretString: JSON.stringify({
-        clientId: 'test-client-id',
-        clientSecret: 'test-client-secret',
-      }),
-    });
+    vi.mocked(getGithubOAuthCredentials).mockResolvedValue({
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+    } as any);
+    vi.mocked(exchangeCodeForToken).mockRejectedValue(
+      new Error('GitHub OAuth failed: Bad Request'),
+    );
 
-    // Mock GitHub OAuth failure
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      statusText: 'Bad Request',
-    });
+    const req = makeReq({ body: { code: 'invalid-code' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      body: JSON.stringify({ code: 'invalid-code' }),
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(500);
+    expect(res.getStatus()).toBe(500);
   });
 });

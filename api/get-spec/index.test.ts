@@ -1,93 +1,101 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handler } from './index';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import * as fc from 'fast-check';
 
-const ddbMock = mockClient(DynamoDBDocumentClient);
+vi.mock('./helpers/dynamodb', () => ({ getSpecVersions: vi.fn() }));
+import { getSpecVersions } from './helpers/dynamodb';
+
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function makeReq(overrides: Partial<{ params: any; query: any; headers: any; body: any }> = {}) {
+  return {
+    params: overrides.params || {},
+    query: overrides.query || {},
+    headers: overrides.headers || {},
+    body: overrides.body || null,
+    // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  } as any;
+}
+
+function makeRes() {
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  const res: any = {};
+  let _status = 200;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  let _body: any = null;
+  res.status = (code: number) => {
+    _status = code;
+    return res;
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  res.json = (data: any) => {
+    _body = data;
+    return res;
+  };
+  res.getStatus = () => _status;
+  res.getBody = () => _body;
+  return res;
+}
 
 describe('get-spec Lambda', () => {
   beforeEach(() => {
-    ddbMock.reset();
-    process.env.SPECS_TABLE = 'test-table';
+    vi.clearAllMocks();
   });
 
   it('should return spec versions (happy path)', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'testuser/test-spec',
-          specName: 'test-spec',
-          username: 'testuser',
-          version: '2.0.0',
-          description: 'Version 2',
-          agentTags: ['test'],
-          publishedAt: '2024-12-08T19:00:00.000Z',
-          createdAt: '2024-12-08T19:00:00.000Z',
-          s3Path: 'specs/testuser/test-spec/2.0.0',
-          hash: 'sha256:abc123',
-          files: ['README.md'],
-        },
-        {
-          specId: 'testuser/test-spec',
-          specName: 'test-spec',
-          username: 'testuser',
-          version: '1.0.0',
-          description: 'Version 1',
-          agentTags: ['test'],
-          publishedAt: '2024-12-08T18:00:00.000Z',
-          createdAt: '2024-12-08T18:00:00.000Z',
-          s3Path: 'specs/testuser/test-spec/1.0.0',
-          hash: 'sha256:def456',
-          files: ['README.md'],
-        },
-      ],
-    });
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: {
-        username: 'testuser',
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'testuser/test-spec',
         specName: 'test-spec',
+        username: 'testuser',
+        version: '2.0.0',
+        description: 'Version 2',
+        agentTags: ['test'],
+        publishedAt: '2024-12-08T19:00:00.000Z',
+        createdAt: '2024-12-08T19:00:00.000Z',
+        s3Path: 'specs/testuser/test-spec/2.0.0',
+        hash: 'sha256:abc123',
+        files: ['README.md'],
       },
-    };
+      {
+        specId: 'testuser/test-spec',
+        specName: 'test-spec',
+        username: 'testuser',
+        version: '1.0.0',
+        description: 'Version 1',
+        agentTags: ['test'],
+        publishedAt: '2024-12-08T18:00:00.000Z',
+        createdAt: '2024-12-08T18:00:00.000Z',
+        s3Path: 'specs/testuser/test-spec/1.0.0',
+        hash: 'sha256:def456',
+        files: ['README.md'],
+      },
+    ] as any);
 
-    const result = await handler(event as APIGatewayProxyEvent);
+    const req = makeReq({ params: { username: 'testuser', specName: 'test-spec' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
+    expect(res.getStatus()).toBe(200);
+    const body = res.getBody();
     expect(body.specId).toBe('testuser/test-spec');
     expect(body.versions).toHaveLength(2);
     expect(body.versions[0].version).toBe('2.0.0');
   });
 
   it('should return 404 for non-existent spec (sad path)', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [],
-    });
+    vi.mocked(getSpecVersions).mockResolvedValue([]);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: {
-        username: 'testuser',
-        specName: 'nonexistent',
-      },
-    };
+    const req = makeReq({ params: { username: 'testuser', specName: 'nonexistent' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(404);
-    const body = JSON.parse(result.body);
-    expect(body.error).toContain('not found');
+    expect(res.getStatus()).toBe(404);
+    expect(res.getBody().error).toContain('not found');
   });
 });
 
 // ---------------------------------------------------------------------------
 // Property 12: Get-spec version type mapping correctness
-// For any set of DynamoDB version items with varying type values (including
-// items with no type field), the transformed version response should include
-// the correct type for each version, defaulting to "spec" when the source
-// item lacks a type field.
-// Validates: Requirements 11.1, 11.2, 11.3
 // ---------------------------------------------------------------------------
 
 describe('Property 12: Get-spec version type mapping correctness', () => {
@@ -102,36 +110,28 @@ describe('Property 12: Get-spec version type mapping correctness', () => {
         }),
         async (item) => {
           const specId = `${item.username}/${item.specName}`;
+          vi.mocked(getSpecVersions).mockResolvedValue([
+            {
+              specId,
+              specName: item.specName,
+              username: item.username,
+              version: item.version,
+              description: item.description,
+              type: 'spec',
+              tags: [],
+              createdAt: '2024-01-01T00:00:00.000Z',
+              s3Path: `specs/${specId}/${item.version}`,
+              hash: 'sha256:abc123',
+              files: ['index.md'],
+              downloads: 0,
+            },
+          ] as any);
 
-          ddbMock.on(QueryCommand).resolves({
-            Items: [
-              {
-                specId,
-                specName: item.specName,
-                username: item.username,
-                version: item.version,
-                description: item.description,
-                type: 'spec',
-                tags: [],
-                createdAt: '2024-01-01T00:00:00.000Z',
-                s3Path: `specs/${specId}/${item.version}`,
-                hash: 'sha256:abc123',
-                files: ['index.md'],
-                downloads: 0,
-              },
-            ],
-          });
-
-          const event: Partial<APIGatewayProxyEvent> = {
-            pathParameters: { username: item.username, specName: item.specName },
-          };
-
-          const result = await handler(event as APIGatewayProxyEvent);
-          expect(result.statusCode).toBe(200);
-
-          const body = JSON.parse(result.body);
-          expect(body.versions).toHaveLength(1);
-          expect(body.versions[0].type).toBe('spec');
+          const req = makeReq({ params: { username: item.username, specName: item.specName } });
+          const res = makeRes();
+          await handler(req, res);
+          expect(res.getStatus()).toBe(200);
+          expect(res.getBody().versions[0].type).toBe('spec');
         },
       ),
       { numRuns: 20 },
@@ -149,36 +149,28 @@ describe('Property 12: Get-spec version type mapping correctness', () => {
         }),
         async (item) => {
           const specId = `${item.username}/${item.specName}`;
+          vi.mocked(getSpecVersions).mockResolvedValue([
+            {
+              specId,
+              specName: item.specName,
+              username: item.username,
+              version: item.version,
+              description: item.description,
+              type: 'power',
+              tags: [],
+              createdAt: '2024-01-01T00:00:00.000Z',
+              s3Path: `specs/${specId}/${item.version}`,
+              hash: 'sha256:abc123',
+              files: ['index.md'],
+              downloads: 0,
+            },
+          ] as any);
 
-          ddbMock.on(QueryCommand).resolves({
-            Items: [
-              {
-                specId,
-                specName: item.specName,
-                username: item.username,
-                version: item.version,
-                description: item.description,
-                type: 'power',
-                tags: [],
-                createdAt: '2024-01-01T00:00:00.000Z',
-                s3Path: `specs/${specId}/${item.version}`,
-                hash: 'sha256:abc123',
-                files: ['index.md'],
-                downloads: 0,
-              },
-            ],
-          });
-
-          const event: Partial<APIGatewayProxyEvent> = {
-            pathParameters: { username: item.username, specName: item.specName },
-          };
-
-          const result = await handler(event as APIGatewayProxyEvent);
-          expect(result.statusCode).toBe(200);
-
-          const body = JSON.parse(result.body);
-          expect(body.versions).toHaveLength(1);
-          expect(body.versions[0].type).toBe('power');
+          const req = makeReq({ params: { username: item.username, specName: item.specName } });
+          const res = makeRes();
+          await handler(req, res);
+          expect(res.getStatus()).toBe(200);
+          expect(res.getBody().versions[0].type).toBe('power');
         },
       ),
       { numRuns: 20 },
@@ -196,36 +188,28 @@ describe('Property 12: Get-spec version type mapping correctness', () => {
         }),
         async (item) => {
           const specId = `${item.username}/${item.specName}`;
+          vi.mocked(getSpecVersions).mockResolvedValue([
+            {
+              specId,
+              specName: item.specName,
+              username: item.username,
+              version: item.version,
+              description: item.description,
+              // No type field — should default to "spec"
+              tags: [],
+              createdAt: '2024-01-01T00:00:00.000Z',
+              s3Path: `specs/${specId}/${item.version}`,
+              hash: 'sha256:abc123',
+              files: ['index.md'],
+              downloads: 0,
+            },
+          ] as any);
 
-          ddbMock.on(QueryCommand).resolves({
-            Items: [
-              {
-                specId,
-                specName: item.specName,
-                username: item.username,
-                version: item.version,
-                description: item.description,
-                // No type field — should default to "spec"
-                tags: [],
-                createdAt: '2024-01-01T00:00:00.000Z',
-                s3Path: `specs/${specId}/${item.version}`,
-                hash: 'sha256:abc123',
-                files: ['index.md'],
-                downloads: 0,
-              },
-            ],
-          });
-
-          const event: Partial<APIGatewayProxyEvent> = {
-            pathParameters: { username: item.username, specName: item.specName },
-          };
-
-          const result = await handler(event as APIGatewayProxyEvent);
-          expect(result.statusCode).toBe(200);
-
-          const body = JSON.parse(result.body);
-          expect(body.versions).toHaveLength(1);
-          expect(body.versions[0].type).toBe('spec');
+          const req = makeReq({ params: { username: item.username, specName: item.specName } });
+          const res = makeRes();
+          await handler(req, res);
+          expect(res.getStatus()).toBe(200);
+          expect(res.getBody().versions[0].type).toBe('spec');
         },
       ),
       { numRuns: 20 },
@@ -233,61 +217,57 @@ describe('Property 12: Get-spec version type mapping correctness', () => {
   });
 
   it('mixed versions preserve individual type values', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'user/my-spec',
-          specName: 'my-spec',
-          username: 'user',
-          version: '2.0.0',
-          description: 'Version 2 as power',
-          type: 'power',
-          tags: [],
-          createdAt: '2024-12-08T19:00:00.000Z',
-          s3Path: 'specs/user/my-spec/2.0.0',
-          hash: 'sha256:abc123',
-          files: ['index.md'],
-          downloads: 0,
-        },
-        {
-          specId: 'user/my-spec',
-          specName: 'my-spec',
-          username: 'user',
-          version: '1.0.0',
-          description: 'Version 1 as spec',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-12-08T18:00:00.000Z',
-          s3Path: 'specs/user/my-spec/1.0.0',
-          hash: 'sha256:def456',
-          files: ['index.md'],
-          downloads: 0,
-        },
-        {
-          specId: 'user/my-spec',
-          specName: 'my-spec',
-          username: 'user',
-          version: '0.1.0',
-          description: 'Legacy version without type',
-          // No type field
-          tags: [],
-          createdAt: '2024-12-08T17:00:00.000Z',
-          s3Path: 'specs/user/my-spec/0.1.0',
-          hash: 'sha256:ghi789',
-          files: ['index.md'],
-          downloads: 0,
-        },
-      ],
-    });
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'user/my-spec',
+        specName: 'my-spec',
+        username: 'user',
+        version: '2.0.0',
+        description: 'Version 2 as power',
+        type: 'power',
+        tags: [],
+        createdAt: '2024-12-08T19:00:00.000Z',
+        s3Path: 'specs/user/my-spec/2.0.0',
+        hash: 'sha256:abc123',
+        files: ['index.md'],
+        downloads: 0,
+      },
+      {
+        specId: 'user/my-spec',
+        specName: 'my-spec',
+        username: 'user',
+        version: '1.0.0',
+        description: 'Version 1 as spec',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-12-08T18:00:00.000Z',
+        s3Path: 'specs/user/my-spec/1.0.0',
+        hash: 'sha256:def456',
+        files: ['index.md'],
+        downloads: 0,
+      },
+      {
+        specId: 'user/my-spec',
+        specName: 'my-spec',
+        username: 'user',
+        version: '0.1.0',
+        description: 'Legacy version without type',
+        // No type field
+        tags: [],
+        createdAt: '2024-12-08T17:00:00.000Z',
+        s3Path: 'specs/user/my-spec/0.1.0',
+        hash: 'sha256:ghi789',
+        files: ['index.md'],
+        downloads: 0,
+      },
+    ] as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: { username: 'user', specName: 'my-spec' },
-    };
+    const req = makeReq({ params: { username: 'user', specName: 'my-spec' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(200);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(200);
-
-    const body = JSON.parse(result.body);
+    const body = res.getBody();
     expect(body.versions).toHaveLength(3);
     expect(body.versions[0].type).toBe('power');
     expect(body.versions[1].type).toBe('spec');
@@ -297,164 +277,127 @@ describe('Property 12: Get-spec version type mapping correctness', () => {
 
 // ---------------------------------------------------------------------------
 // Property 13: Get-spec deps field handling
-// For any spec version with a deps field in DynamoDB, the API response should
-// include the deps field. For versions without deps, the field should be
-// absent or empty.
-// Validates: Transitive dependency feature requirements
 // ---------------------------------------------------------------------------
 
 describe('Property 13: Get-spec deps field handling', () => {
-  it('should include deps field when present in DynamoDB', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'testuser/api-spec',
-          specName: 'api-spec',
-          username: 'testuser',
-          version: '1.0.0',
-          description: 'API spec with dependencies',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          s3Path: 'specs/testuser/api-spec/1.0.0',
-          hash: 'sha256:abc123',
-          files: ['index.md'],
-          downloads: 0,
-          deps: {
-            'shared-errors': '1.0.0',
-            'base-types': '2.0.0',
-          },
-        },
-      ],
-    });
+  it('should include deps field when present', async () => {
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'testuser/api-spec',
+        specName: 'api-spec',
+        username: 'testuser',
+        version: '1.0.0',
+        description: 'API spec with dependencies',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        s3Path: 'specs/testuser/api-spec/1.0.0',
+        hash: 'sha256:abc123',
+        files: ['index.md'],
+        downloads: 0,
+        deps: { 'shared-errors': '1.0.0', 'base-types': '2.0.0' },
+      },
+    ] as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: { username: 'testuser', specName: 'api-spec' },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(200);
-
-    const body = JSON.parse(result.body);
-    expect(body.versions).toHaveLength(1);
-    expect(body.versions[0].deps).toEqual({
+    const req = makeReq({ params: { username: 'testuser', specName: 'api-spec' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().versions[0].deps).toEqual({
       'shared-errors': '1.0.0',
       'base-types': '2.0.0',
     });
   });
 
   it('should handle versions without deps field', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'testuser/simple-spec',
-          specName: 'simple-spec',
-          username: 'testuser',
-          version: '1.0.0',
-          description: 'Simple spec without dependencies',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          s3Path: 'specs/testuser/simple-spec/1.0.0',
-          hash: 'sha256:abc123',
-          files: ['index.md'],
-          downloads: 0,
-          // No deps field
-        },
-      ],
-    });
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'testuser/simple-spec',
+        specName: 'simple-spec',
+        username: 'testuser',
+        version: '1.0.0',
+        description: 'Simple spec without dependencies',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        s3Path: 'specs/testuser/simple-spec/1.0.0',
+        hash: 'sha256:abc123',
+        files: ['index.md'],
+        downloads: 0,
+      },
+    ] as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: { username: 'testuser', specName: 'simple-spec' },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(200);
-
-    const body = JSON.parse(result.body);
-    expect(body.versions).toHaveLength(1);
-    expect(body.versions[0].deps).toBeUndefined();
+    const req = makeReq({ params: { username: 'testuser', specName: 'simple-spec' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().versions[0].deps).toBeUndefined();
   });
 
   it('should handle empty deps object', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'testuser/empty-deps-spec',
-          specName: 'empty-deps-spec',
-          username: 'testuser',
-          version: '1.0.0',
-          description: 'Spec with empty deps',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-01-01T00:00:00.000Z',
-          s3Path: 'specs/testuser/empty-deps-spec/1.0.0',
-          hash: 'sha256:abc123',
-          files: ['index.md'],
-          downloads: 0,
-          deps: {},
-        },
-      ],
-    });
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'testuser/empty-deps-spec',
+        specName: 'empty-deps-spec',
+        username: 'testuser',
+        version: '1.0.0',
+        description: 'Spec with empty deps',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        s3Path: 'specs/testuser/empty-deps-spec/1.0.0',
+        hash: 'sha256:abc123',
+        files: ['index.md'],
+        downloads: 0,
+        deps: {},
+      },
+    ] as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: { username: 'testuser', specName: 'empty-deps-spec' },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(200);
-
-    const body = JSON.parse(result.body);
-    expect(body.versions).toHaveLength(1);
-    expect(body.versions[0].deps).toEqual({});
+    const req = makeReq({ params: { username: 'testuser', specName: 'empty-deps-spec' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().versions[0].deps).toEqual({});
   });
 
   it('should handle mixed versions with and without deps', async () => {
-    ddbMock.on(QueryCommand).resolves({
-      Items: [
-        {
-          specId: 'user/evolving-spec',
-          specName: 'evolving-spec',
-          username: 'user',
-          version: '2.0.0',
-          description: 'Version with deps',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-12-08T19:00:00.000Z',
-          s3Path: 'specs/user/evolving-spec/2.0.0',
-          hash: 'sha256:abc123',
-          files: ['index.md'],
-          downloads: 0,
-          deps: {
-            'shared-lib': '3.0.0',
-          },
-        },
-        {
-          specId: 'user/evolving-spec',
-          specName: 'evolving-spec',
-          username: 'user',
-          version: '1.0.0',
-          description: 'Legacy version without deps',
-          type: 'spec',
-          tags: [],
-          createdAt: '2024-12-08T18:00:00.000Z',
-          s3Path: 'specs/user/evolving-spec/1.0.0',
-          hash: 'sha256:def456',
-          files: ['index.md'],
-          downloads: 0,
-          // No deps field
-        },
-      ],
-    });
+    vi.mocked(getSpecVersions).mockResolvedValue([
+      {
+        specId: 'user/evolving-spec',
+        specName: 'evolving-spec',
+        username: 'user',
+        version: '2.0.0',
+        description: 'Version with deps',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-12-08T19:00:00.000Z',
+        s3Path: 'specs/user/evolving-spec/2.0.0',
+        hash: 'sha256:abc123',
+        files: ['index.md'],
+        downloads: 0,
+        deps: { 'shared-lib': '3.0.0' },
+      },
+      {
+        specId: 'user/evolving-spec',
+        specName: 'evolving-spec',
+        username: 'user',
+        version: '1.0.0',
+        description: 'Legacy version without deps',
+        type: 'spec',
+        tags: [],
+        createdAt: '2024-12-08T18:00:00.000Z',
+        s3Path: 'specs/user/evolving-spec/1.0.0',
+        hash: 'sha256:def456',
+        files: ['index.md'],
+        downloads: 0,
+      },
+    ] as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      pathParameters: { username: 'user', specName: 'evolving-spec' },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(200);
-
-    const body = JSON.parse(result.body);
+    const req = makeReq({ params: { username: 'user', specName: 'evolving-spec' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(200);
+    const body = res.getBody();
     expect(body.versions).toHaveLength(2);
     expect(body.versions[0].deps).toEqual({ 'shared-lib': '3.0.0' });
     expect(body.versions[1].deps).toBeUndefined();

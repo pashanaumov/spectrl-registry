@@ -1,79 +1,83 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { DynamoDBDocumentClient, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { handler } from './index';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 
-const ddbMock = mockClient(DynamoDBDocumentClient);
-const s3Mock = mockClient(S3Client);
+vi.mock('./helpers/dynamodb', () => ({
+  checkSpecExists: vi.fn(),
+  deleteSpecMetadata: vi.fn(),
+}));
+vi.mock('./helpers/s3', () => ({ deleteSpecFromS3: vi.fn(), deleteSpecFromStorage: vi.fn() }));
+
+import { checkSpecExists, deleteSpecMetadata } from './helpers/dynamodb';
+import { deleteSpecFromStorage } from './helpers/s3';
+
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function makeReq(overrides: Partial<{ params: any; query: any; headers: any; body: any }> = {}) {
+  return {
+    params: overrides.params || {},
+    query: overrides.query || {},
+    headers: overrides.headers || {},
+    body: overrides.body || null,
+    // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  } as any;
+}
+
+function makeRes() {
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  const res: any = {};
+  let _status = 200;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  let _body: any = null;
+  res.status = (code: number) => {
+    _status = code;
+    return res;
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  res.json = (data: any) => {
+    _body = data;
+    return res;
+  };
+  res.getStatus = () => _status;
+  res.getBody = () => _body;
+  return res;
+}
 
 describe('unpublish-spec Lambda', () => {
   beforeEach(() => {
-    ddbMock.reset();
-    s3Mock.reset();
     vi.clearAllMocks();
-
     process.env.BUCKET_NAME = 'test-bucket';
     process.env.TABLE_NAME = 'test-table';
   });
 
   it('should unpublish spec successfully (happy path)', async () => {
-    // Mock GitHub API
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ login: 'testuser', id: 123, email: 'test@example.com' }),
     });
+    vi.mocked(checkSpecExists).mockResolvedValue(true as any);
+    vi.mocked(deleteSpecMetadata).mockResolvedValue(undefined as any);
+    vi.mocked(deleteSpecFromStorage).mockResolvedValue(undefined as any);
 
-    // Mock DynamoDB - spec exists
-    ddbMock.on(GetCommand).resolves({
-      Item: {
-        specId: 'testuser/test-spec',
-        version: '1.0.0',
-      },
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      params: { username: 'testuser', specName: 'test-spec', version: '1.0.0' },
     });
-    ddbMock.on(DeleteCommand).resolves({});
+    const res = makeRes();
+    await handler(req, res);
 
-    // Mock S3 - list and delete files
-    s3Mock.on(ListObjectsV2Command).resolves({
-      Contents: [
-        { Key: 'specs/testuser/test-spec/1.0.0/spectrl.json' },
-        { Key: 'specs/testuser/test-spec/1.0.0/files/README.md' },
-      ],
-    });
-    s3Mock.on(DeleteObjectCommand).resolves({});
-
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      pathParameters: {
-        username: 'testuser',
-        specName: 'test-spec',
-        version: '1.0.0',
-      },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.message).toContain('Unpublished');
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().message).toContain('Unpublished');
   });
 
   it('should reject unauthorized request (sad path)', async () => {
-    const event: Partial<APIGatewayProxyEvent> = {
+    const req = makeReq({
       headers: {},
-      pathParameters: {
-        username: 'testuser',
-        specName: 'test-spec',
-        version: '1.0.0',
-      },
-    };
+      params: { username: 'testuser', specName: 'test-spec', version: '1.0.0' },
+    });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(401);
-    const body = JSON.parse(result.body);
-    expect(body.error).toContain('Authorization');
+    expect(res.getStatus()).toBe(401);
+    expect(res.getBody().error).toContain('Authorization');
   });
 
   it('should reject ownership violation (sad path)', async () => {
@@ -82,26 +86,14 @@ describe('unpublish-spec Lambda', () => {
       json: async () => ({ login: 'otheruser', id: 456, email: 'other@example.com' }),
     });
 
-    ddbMock.on(GetCommand).resolves({
-      Item: {
-        specId: 'testuser/test-spec',
-        version: '1.0.0',
-      },
+    const req = makeReq({
+      headers: { authorization: 'Bearer fake-token' },
+      params: { username: 'testuser', specName: 'test-spec', version: '1.0.0' },
     });
+    const res = makeRes();
+    await handler(req, res);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      headers: { Authorization: 'Bearer fake-token' },
-      pathParameters: {
-        username: 'testuser',
-        specName: 'test-spec',
-        version: '1.0.0',
-      },
-    };
-
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(403);
-    const body = JSON.parse(result.body);
-    expect(body.error).toContain('Ownership');
+    expect(res.getStatus()).toBe(403);
+    expect(res.getBody().error).toContain('Ownership');
   });
 });

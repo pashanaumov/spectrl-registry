@@ -1,45 +1,11 @@
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { secretsManagerGithubOAuthCredentialsResponseSchema } from '../schemas/aws';
+import { getGithubOAuthCredentials } from '../../shared/secrets';
 import {
   exchangeCodeForTokenRequestSchema,
   exchangeCodeForTokenResponseSchema,
   gitHubUserSchema,
 } from '../schemas/github';
 
-export const defaultAWSRegion = 'eu-north-1';
-
-export async function getGithubOAuthCredentials() {
-  const secretsManager = new SecretsManagerClient({
-    region: process.env.AWS_REGION ?? defaultAWSRegion,
-  });
-
-  const command = new GetSecretValueCommand({
-    SecretId: process.env.SECRETS_ARN,
-  });
-
-  const response = await secretsManager.send(command);
-
-  if (!response.SecretString) {
-    throw new Error('Secret value is empty');
-  }
-
-  const secret = JSON.parse(response.SecretString);
-
-  const parsedSecret = secretsManagerGithubOAuthCredentialsResponseSchema.safeParse(secret);
-
-  if (!parsedSecret.success) {
-    throw new Error('Could not parse Github OAuth Secret');
-  }
-
-  if (!parsedSecret.data.clientId || !parsedSecret.data.clientSecret) {
-    throw new Error('Could not retrieve Github OAuth Secrets');
-  }
-
-  return {
-    clientId: parsedSecret.data.clientId,
-    clientSecret: parsedSecret.data.clientSecret,
-  };
-}
+export { getGithubOAuthCredentials };
 
 export async function exchangeCodeForToken({
   code,

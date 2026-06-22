@@ -51,11 +51,19 @@ temp/
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+terraform.tfvars
 terraform.tfvars.backup
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# GCP credentials
+*.json
+!package.json
+!tsconfig*.json
+!biome.json
+!components.json
 
 # Lambda build artifacts
 infra/modules/lambda/builds/*.zip
@@ -64,3 +72,8 @@ temp-docs/
 
 # Kiro IDE
 .kiro/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

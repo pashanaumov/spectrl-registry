@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "spectrl_registry",
+  "project_id": "9465c0da-0189-4f38-ab9f-3dbe5ac590f7"
+}

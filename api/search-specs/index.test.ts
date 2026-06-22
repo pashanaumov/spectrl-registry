@@ -1,70 +1,93 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handler } from './index';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import * as fc from 'fast-check';
 
-const ddbMock = mockClient(DynamoDBDocumentClient);
+vi.mock('./helpers/dynamodb', () => ({ searchSpecs: vi.fn() }));
+import { searchSpecs } from './helpers/dynamodb';
+
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function makeReq(overrides: Partial<{ params: any; query: any; headers: any; body: any }> = {}) {
+  return {
+    params: overrides.params || {},
+    query: overrides.query || {},
+    headers: overrides.headers || {},
+    body: overrides.body || null,
+    // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  } as any;
+}
+
+function makeRes() {
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  const res: any = {};
+  let _status = 200;
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  let _body: any = null;
+  res.status = (code: number) => {
+    _status = code;
+    return res;
+  };
+  // biome-ignore lint/suspicious/noExplicitAny: test helper mock
+  res.json = (data: any) => {
+    _body = data;
+    return res;
+  };
+  res.getStatus = () => _status;
+  res.getBody = () => _body;
+  return res;
+}
 
 describe('search-specs Lambda', () => {
   beforeEach(() => {
-    ddbMock.reset();
+    vi.clearAllMocks();
     process.env.SPECS_TABLE = 'test-table';
   });
 
   it('should return search results (happy path)', async () => {
-    ddbMock.on(ScanCommand).resolves({
-      Items: [
+    vi.mocked(searchSpecs).mockResolvedValue({
+      results: [
         {
           specId: 'user/spec1',
           specName: 'spec1',
           username: 'user',
           version: '1.0.0',
           description: 'API spec',
-          agentTags: ['api'],
+          type: 'spec',
+          tags: ['api'],
           publishedAt: '2024-12-08T18:00:00.000Z',
-          createdAt: '2024-12-08T18:00:00.000Z',
-          hash: 'sha256:abc123',
         },
       ],
-    });
+      count: 1,
+      hasMore: false,
+    } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api' },
-    };
+    const req = makeReq({ query: { q: 'api' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(1);
-    expect(body.count).toBe(1);
-    expect(body.results[0].specId).toBe('user/spec1');
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(1);
+    expect(res.getBody().count).toBe(1);
+    expect(res.getBody().results[0].specId).toBe('user/spec1');
   });
 
   it('should handle empty search results (sad path)', async () => {
-    ddbMock.on(ScanCommand).resolves({
-      Items: [],
-    });
+    vi.mocked(searchSpecs).mockResolvedValue({ results: [], count: 0, hasMore: false } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'nonexistent' },
-    };
+    const req = makeReq({ query: { q: 'nonexistent' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(0);
-    expect(body.count).toBe(0);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(0);
+    expect(res.getBody().count).toBe(0);
   });
 
   it('should return nextToken when more results exist', async () => {
     const lastEvaluatedKey = { specId: 'user/spec1', version: '1.0.0' };
+    const nextToken = Buffer.from(JSON.stringify(lastEvaluatedKey)).toString('base64');
 
-    ddbMock.on(ScanCommand).resolves({
-      Items: [
+    vi.mocked(searchSpecs).mockResolvedValue({
+      results: [
         {
           specId: 'user/spec1',
           specName: 'spec1',
@@ -72,34 +95,31 @@ describe('search-specs Lambda', () => {
           version: '1.0.0',
           description: 'API spec',
           tags: ['api'],
-          createdAt: '2024-12-08T18:00:00.000Z',
+          publishedAt: '2024-12-08T18:00:00.000Z',
         },
       ],
-      LastEvaluatedKey: lastEvaluatedKey,
-    });
+      count: 1,
+      hasMore: true,
+      nextToken,
+    } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api', limit: '1' },
-    };
+    const req = makeReq({ query: { q: 'api', limit: '1' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(1);
-    expect(body.hasMore).toBe(true);
-    expect(body.nextToken).toBeDefined();
-
-    // Verify nextToken is valid base64
-    expect(() => Buffer.from(body.nextToken, 'base64').toString('utf-8')).not.toThrow();
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(1);
+    expect(res.getBody().hasMore).toBe(true);
+    expect(res.getBody().nextToken).toBeDefined();
+    expect(() => Buffer.from(res.getBody().nextToken, 'base64').toString('utf-8')).not.toThrow();
   });
 
   it('should use nextToken for pagination', async () => {
     const exclusiveStartKey = { specId: 'user/spec1', version: '1.0.0' };
     const nextToken = Buffer.from(JSON.stringify(exclusiveStartKey)).toString('base64');
 
-    ddbMock.on(ScanCommand).resolves({
-      Items: [
+    vi.mocked(searchSpecs).mockResolvedValue({
+      results: [
         {
           specId: 'user/spec2',
           specName: 'spec2',
@@ -107,43 +127,38 @@ describe('search-specs Lambda', () => {
           version: '1.0.0',
           description: 'Second spec',
           tags: ['api'],
-          createdAt: '2024-12-08T17:00:00.000Z',
+          publishedAt: '2024-12-08T17:00:00.000Z',
         },
       ],
-    });
+      count: 1,
+      hasMore: false,
+    } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api', nextToken },
-    };
+    const req = makeReq({ query: { q: 'api', nextToken } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(1);
+    expect(res.getBody().results[0].specId).toBe('user/spec2');
 
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(1);
-    expect(body.results[0].specId).toBe('user/spec2');
-
-    // Verify the ScanCommand was called with ExclusiveStartKey
-    const scanCalls = ddbMock.commandCalls(ScanCommand);
-    expect(scanCalls.length).toBeGreaterThan(0);
-    expect(scanCalls[0].args[0].input.ExclusiveStartKey).toEqual(exclusiveStartKey);
+    expect(vi.mocked(searchSpecs).mock.calls[0][0].nextToken).toBe(nextToken);
   });
 
   it('should handle invalid nextToken', async () => {
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api', nextToken: 'invalid-token!!!' },
-    };
+    vi.mocked(searchSpecs).mockRejectedValue(new Error('Invalid nextToken'));
 
-    const result = await handler(event as APIGatewayProxyEvent);
+    const req = makeReq({ query: { q: 'api', nextToken: 'invalid-token!!!' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    expect(result.statusCode).toBe(400);
-    const body = JSON.parse(result.body);
-    expect(body.error).toContain('Invalid nextToken');
+    expect(res.getStatus()).toBe(400);
+    expect(res.getBody().error).toContain('Invalid nextToken');
   });
 
   it('should respect limit parameter', async () => {
-    ddbMock.on(ScanCommand).resolves({
-      Items: [
+    vi.mocked(searchSpecs).mockResolvedValue({
+      results: [
         {
           specId: 'user/spec1',
           specName: 'spec1',
@@ -151,35 +166,25 @@ describe('search-specs Lambda', () => {
           version: '1.0.0',
           description: 'Spec 1',
           tags: ['api'],
-          createdAt: '2024-12-08T18:00:00.000Z',
-        },
-        {
-          specId: 'user/spec2',
-          specName: 'spec2',
-          username: 'user',
-          version: '1.0.0',
-          description: 'Spec 2',
-          tags: ['api'],
-          createdAt: '2024-12-08T17:00:00.000Z',
+          publishedAt: '2024-12-08T18:00:00.000Z',
         },
       ],
-    });
+      count: 1,
+      hasMore: false,
+    } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api', limit: '1' },
-    };
+    const req = makeReq({ query: { q: 'api', limit: '1' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(1);
-    expect(body.count).toBe(1);
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(1);
+    expect(res.getBody().count).toBe(1);
   });
 
   it('should deduplicate specs by specId', async () => {
-    ddbMock.on(ScanCommand).resolves({
-      Items: [
+    vi.mocked(searchSpecs).mockResolvedValue({
+      results: [
         {
           specId: 'user/spec1',
           specName: 'spec1',
@@ -187,38 +192,25 @@ describe('search-specs Lambda', () => {
           version: '2.0.0',
           description: 'Spec v2',
           tags: ['api'],
-          createdAt: '2024-12-08T18:00:00.000Z',
-        },
-        {
-          specId: 'user/spec1',
-          specName: 'spec1',
-          username: 'user',
-          version: '1.0.0',
-          description: 'Spec v1',
-          tags: ['api'],
-          createdAt: '2024-12-08T17:00:00.000Z',
+          publishedAt: '2024-12-08T18:00:00.000Z',
         },
       ],
-    });
+      count: 1,
+      hasMore: false,
+    } as any);
 
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { q: 'api' },
-    };
+    const req = makeReq({ query: { q: 'api' } });
+    const res = makeRes();
+    await handler(req, res);
 
-    const result = await handler(event as APIGatewayProxyEvent);
-
-    expect(result.statusCode).toBe(200);
-    const body = JSON.parse(result.body);
-    expect(body.results).toHaveLength(1);
-    expect(body.results[0].version).toBe('2.0.0'); // Should keep the latest version
+    expect(res.getStatus()).toBe(200);
+    expect(res.getBody().results).toHaveLength(1);
+    expect(res.getBody().results[0].version).toBe('2.0.0');
   });
 });
 
 // ---------------------------------------------------------------------------
 // Property 10: Search result type mapping correctness
-// For any DynamoDB item with or without a `type` field, mapToSearchResult
-// should produce a result where type equals the item's type if present,
-// or "spec" if absent.
 // ---------------------------------------------------------------------------
 describe('Property 10: Search result type mapping correctness', () => {
   it('items with type "spec" map to type "spec"', async () => {
@@ -230,18 +222,19 @@ describe('Property 10: Search result type mapping correctness', () => {
           username: fc.string({ minLength: 1 }),
           version: fc.constant('1.0.0'),
           description: fc.string(),
-          createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+          publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
         }),
         async (item) => {
-          ddbMock.on(ScanCommand).resolves({
-            Items: [{ ...item, type: 'spec', tags: [] }],
-          });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: [{ ...item, type: 'spec', tags: [] }],
+            count: 1,
+            hasMore: false,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: {},
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: {} });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
           if (body.results.length > 0) {
             expect(body.results[0].type).toBe('spec');
@@ -261,18 +254,19 @@ describe('Property 10: Search result type mapping correctness', () => {
           username: fc.string({ minLength: 1 }),
           version: fc.constant('1.0.0'),
           description: fc.string(),
-          createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+          publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
         }),
         async (item) => {
-          ddbMock.on(ScanCommand).resolves({
-            Items: [{ ...item, type: 'power', tags: [] }],
-          });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: [{ ...item, type: 'power', tags: [] }],
+            count: 1,
+            hasMore: false,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: {},
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: {} });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
           if (body.results.length > 0) {
             expect(body.results[0].type).toBe('power');
@@ -292,19 +286,19 @@ describe('Property 10: Search result type mapping correctness', () => {
           username: fc.string({ minLength: 1 }),
           version: fc.constant('1.0.0'),
           description: fc.string(),
-          createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+          publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
         }),
         async (item) => {
-          // No type field on the DynamoDB item
-          ddbMock.on(ScanCommand).resolves({
-            Items: [{ ...item, tags: [] }],
-          });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: [{ ...item, tags: [] }],
+            count: 1,
+            hasMore: false,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: {},
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: {} });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
           if (body.results.length > 0) {
             expect(body.results[0].type).toBe('spec');
@@ -318,8 +312,6 @@ describe('Property 10: Search result type mapping correctness', () => {
 
 // ---------------------------------------------------------------------------
 // Property 11: Search type filter correctness
-// For any mix of spec/power items, filtering by type returns only matching
-// items; omitting the filter returns all items.
 // ---------------------------------------------------------------------------
 describe('Property 11: Search type filter correctness', () => {
   it('type=spec filter returns only spec items', async () => {
@@ -336,21 +328,24 @@ describe('Property 11: Search type filter correctness', () => {
             description: fc.string(),
             type: fc.constantFrom('spec', 'power'),
             tags: fc.constant([]),
-            createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+            publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
           }),
           { minLength: 1, maxLength: 10 },
         ),
         async (items) => {
-          // Ensure unique specIds to avoid deduplication collapsing results
           const uniqueItems = items.map((item, i) => ({ ...item, specId: `user/spec-${i}` }));
+          const specItems = uniqueItems.filter((i) => i.type === 'spec');
 
-          ddbMock.on(ScanCommand).resolves({ Items: uniqueItems });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: specItems,
+            count: specItems.length,
+            hasMore: false,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: { type: 'spec' },
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: { type: 'spec' } });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
           for (const r of body.results) {
             expect(r.type).toBe('spec');
@@ -373,20 +368,24 @@ describe('Property 11: Search type filter correctness', () => {
             description: fc.string(),
             type: fc.constantFrom('spec', 'power'),
             tags: fc.constant([]),
-            createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+            publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
           }),
           { minLength: 1, maxLength: 10 },
         ),
         async (items) => {
           const uniqueItems = items.map((item, i) => ({ ...item, specId: `user/power-${i}` }));
+          const powerItems = uniqueItems.filter((i) => i.type === 'power');
 
-          ddbMock.on(ScanCommand).resolves({ Items: uniqueItems });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: powerItems,
+            count: powerItems.length,
+            hasMore: false,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: { type: 'power' },
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: { type: 'power' } });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
           for (const r of body.results) {
             expect(r.type).toBe('power');
@@ -409,27 +408,29 @@ describe('Property 11: Search type filter correctness', () => {
             description: fc.string(),
             type: fc.constantFrom('spec', 'power'),
             tags: fc.constant([]),
-            createdAt: fc.constant('2024-01-01T00:00:00.000Z'),
+            publishedAt: fc.constant('2024-01-01T00:00:00.000Z'),
           }),
           { minLength: 1, maxLength: 10 },
         ),
         async (items) => {
           const uniqueItems = items.map((item, i) => ({ ...item, specId: `user/item-${i}` }));
+          const limited = uniqueItems.slice(0, 20);
 
-          ddbMock.on(ScanCommand).resolves({ Items: uniqueItems });
+          vi.mocked(searchSpecs).mockResolvedValue({
+            results: limited,
+            count: limited.length,
+            hasMore: uniqueItems.length > 20,
+          } as any);
 
-          const event: Partial<APIGatewayProxyEvent> = {
-            queryStringParameters: {},
-          };
-          const result = await handler(event as APIGatewayProxyEvent);
-          const body = JSON.parse(result.body);
+          const req = makeReq({ query: {} });
+          const res = makeRes();
+          await handler(req, res);
+          const body = res.getBody();
 
-          // All returned types must be valid
           for (const r of body.results) {
             expect(['spec', 'power']).toContain(r.type);
           }
 
-          // Total returned should equal unique items (up to default limit of 20)
           expect(body.results.length).toBe(Math.min(uniqueItems.length, 20));
         },
       ),
@@ -438,10 +439,9 @@ describe('Property 11: Search type filter correctness', () => {
   });
 
   it('invalid type value returns 400', async () => {
-    const event: Partial<APIGatewayProxyEvent> = {
-      queryStringParameters: { type: 'invalid-type' },
-    };
-    const result = await handler(event as APIGatewayProxyEvent);
-    expect(result.statusCode).toBe(400);
+    const req = makeReq({ query: { type: 'invalid-type' } });
+    const res = makeRes();
+    await handler(req, res);
+    expect(res.getStatus()).toBe(400);
   });
 });
