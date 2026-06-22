@@ -1,1 +1,1 @@
-export { deleteSpecFromStorage } from '../../shared/storage';
+export { deleteSpecFromStorage as deleteSpecFromS3 } from '../../shared/storage';

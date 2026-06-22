@@ -1,1 +1,1 @@
-export { uploadToStorage } from '../../shared/storage';
+export { uploadToStorage as uploadToS3 } from '../../shared/storage';
