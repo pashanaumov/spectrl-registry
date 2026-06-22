@@ -32,7 +32,18 @@ for fn in "${FUNCTIONS[@]}"; do
     --external:@google-cloud/functions-framework \
     --minify
 
-  echo '{"main":"index.js","type":"module"}' > "dist/${fn}/package.json"
+  cat > "dist/${fn}/package.json" << 'EOF'
+{
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0",
+    "@google-cloud/storage": "^7.15.0",
+    "@google-cloud/secret-manager": "^5.6.0",
+    "@google-cloud/functions-framework": "^3.4.5"
+  }
+}
+EOF
 
   (cd "dist/${fn}" && zip -q "../${fn}.zip" index.js package.json)
 
