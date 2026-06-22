@@ -1,0 +1,24 @@
+# Source files (only ship dist/)
+src/
+
+# Test files
+*.test.ts
+*.test.js
+*.test.d.ts
+*.test.js.map
+*.test.d.ts.map
+test-colors.js
+
+# Build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Local registry
+.spectrl/
+
+# Source maps (optional - keep if you want them)
+# *.map
+
+# Config files
+tsconfig.json
+vitest.config.ts

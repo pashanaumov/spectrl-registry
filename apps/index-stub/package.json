@@ -1,0 +1,11 @@
+{
+  "name": "@spectrl/index-stub",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node src/server.js",
+    "build": "echo 'no build needed'",
+    "test": "echo 'tests tbd'"
+  }
+}

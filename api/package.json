@@ -1,0 +1,30 @@
+{
+  "name": "api",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "./build-lambdas.sh",
+    "build:tsc": "tsc",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.943.0",
+    "@aws-sdk/client-s3": "^3.943.0",
+    "@aws-sdk/client-secrets-manager": "^3.943.0",
+    "@aws-sdk/lib-dynamodb": "^3.943.0",
+    "@types/aws-lambda": "^8.10.159"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.159",
+    "aws-sdk-client-mock": "^4.1.0",
+    "fast-check": "^4.5.3",
+    "msw": "^2.12.4"
+  }
+}

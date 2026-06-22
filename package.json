@@ -1,0 +1,55 @@
+{
+  "name": "spectrl",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "build:cli": "pnpm -C packages/cli build",
+    "dev": "pnpm -C packages/cli dev",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm -C tests/e2e test",
+    "lint": "biome check .",
+    "format": "prettier --write .",
+    "version:patch": "pnpm -C packages/cli version:patch",
+    "version:minor": "pnpm -C packages/cli version:minor",
+    "version:major": "pnpm -C packages/cli version:major",
+    "release": "pnpm build:cli && pnpm -C packages/cli publish",
+    "prepare": "husky",
+    "typecheck": "tsc --noEmit",
+    "aws:dev": "./run-aws-local.sh",
+    "seed": "bun infra/scripts/seed-dev-data.ts",
+    "run:web": "pnpm -C apps/spectrl-web dev"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "pnpm": {
+    "overrides": {
+      "cmd-ts>chalk": "^5.6.2"
+    }
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.943.0",
+    "@aws-sdk/client-s3": "^3.943.0",
+    "@biomejs/biome": "^1.9.4",
+    "@faker-js/faker": "^10.3.0",
+    "@total-typescript/ts-reset": "^0.6.1",
+    "@types/node": "^24.9.2",
+    "@vitest/ui": "^4.0.16",
+    "esbuild": "^0.27.1",
+    "execa": "^9.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "msw": "^2.12.4",
+    "prettier": "^3.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.16"
+  },
+  "lint-staged": {
+    "*.{ts,js,tsx,jsx,json,md}": [
+      "biome check --write --no-errors-on-unmatched",
+      "prettier --write"
+    ]
+  }
+}

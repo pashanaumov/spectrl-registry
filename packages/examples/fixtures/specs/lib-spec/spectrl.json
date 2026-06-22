@@ -1,0 +1,8 @@
+{
+  "name": "lib-spec",
+  "version": "1.0.0",
+  "deps": {
+    "base-spec": "1.0.0"
+  },
+  "files": ["src/types.md", "src/utils.md"]
+}

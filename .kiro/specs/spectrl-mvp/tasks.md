@@ -1,0 +1,328 @@
+# Implementation Plan
+
+- [x] 0. Set up project scaffolding and dependencies
+  - [x] 0.1 Install missing dependencies
+    - Add @types/node to all packages that need it
+    - Verify zod is installed in schema package
+    - Install vitest and related testing dependencies
+    - _Requirements: All (build support)_
+  - [x] 0.2 Create TypeScript configurations
+    - Create tsconfig.json for schema package extending base config
+    - Create tsconfig.json for core package with schema reference
+    - Create tsconfig.json for cli package with core and schema references
+    - Ensure composite project references work correctly
+    - _Requirements: All (build support)_
+  - [x] 0.3 Set up test infrastructure
+    - Add vitest config to root and packages
+    - Update package.json test scripts to use vitest
+    - Create basic test setup files
+    - _Requirements: All (test support)_
+  - [x] 0.4 Update .gitignore
+    - Add .spectrl/ to gitignore to exclude local registry
+    - Ensure build outputs remain ignored
+    - _Requirements: 6.1 (local registry)_
+  - [x] 0.5 Verify build pipeline
+    - Run pnpm build to ensure all packages compile
+    - Fix any TypeScript configuration issues
+    - Verify workspace dependencies resolve correctly
+    - _Requirements: All (build support)_
+
+- [ ] 1. Update schema package for simplified architecture
+  - [x] 1.1 Update manifest schema
+    - Make `hash` field to have pattern `^sha256:[a-f0-9]{64}$`
+    - Change `deps` from array to object map: `Record<string, string>`
+    - Ensure name pattern is `^[a-z0-9-]+$`
+    - Ensure version pattern is `^\d+\.\d+\.\d+$` (exact semver only)
+    - _Requirements: 2.2, 2.3, 2.4, 2.5, 2.6_
+  - [x] 1.2 Create project index schema
+    - Define schema as `Record<string, { source: string }>`
+    - Key pattern: `^[a-z0-9-]+@\d+\.\d+\.\d+$` (name@version)
+    - Source must be a valid URL (file:// in MVP)
+    - Export ProjectIndex type
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [x] 1.3 Create lock file schema
+    - Define LockEntry with name, version, hash, source, deps fields
+    - Define LockFile with createdAt (ISO-8601) and entries array
+    - Hash pattern: `^sha256:[a-f0-9]{64}$`
+    - Deps is array of strings in format `name@version`
+    - Export LockEntry and LockFile types
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
+  - [x] 1.4 Remove or update index-entry schema
+    - Remove IndexEntry schema (no longer needed)
+    - Or update to match new project index format
+    - Update exports in index.ts
+    - _Requirements: 5.1, 5.2, 5.3_
+  - [x] 1.5 Write unit tests for schemas
+    - Test manifest validation with new hash format
+    - Test project index validation
+    - Test lock file validation
+    - Test error messages for invalid data
+    - _Requirements: 2.1, 2.7, 2.8_
+
+- [x] 2. Update hasher module for SHA-256
+  - [x] 2.1 Keep hasher.ts with computeHash function
+    - Keep file name as hasher.ts
+    - Keep method name as computeHash
+    - Return format: `sha256:<hex>` instead of just hex
+    - _Requirements: 3.2, 8.2_
+  - [x] 2.2 Update hash computation to use SHA-256
+    - Replace BLAKE3 with Node.js crypto SHA-256
+    - Keep normalization and canonicalization logic
+    - Ensure deterministic output
+    - _Requirements: 3.2, 3.3, 3.4, 3.5, 8.2, 8.3, 8.4, 8.5_
+  - [x] 2.3 Update unit tests for SHA-256
+    - Update test expectations for sha256: prefix
+    - Test deterministic output with SHA-256
+    - Test line ending normalization
+    - Test manifest canonicalization
+    - _Requirements: 8.2_
+
+- [x] 3. Update registry module for simplified structure
+  - [x] 3.1 Update registry paths
+    - Change from `{name}/versions/{version}/` to `{name}/{version}/`
+    - Remove blob storage paths
+    - Update path helper methods
+    - _Requirements: 6.1, 6.2, 6.3_
+  - [x] 3.2 Remove locking from publish method
+    - Remove proper-lockfile dependency
+    - Simplify publish to direct file writes
+    - Keep atomic directory creation
+    - _Requirements: 3.6, 3.7, 6.1, 6.2_
+  - [x] 3.3 Update manifest storage
+    - Write manifest with hash field to `{name}/{version}/spectrl.json`
+    - Ensure hash is included in stored manifest
+    - _Requirements: 3.2, 6.3_
+  - [x] 3.4 Update unit tests for registry
+    - Update path expectations
+    - Remove locking tests
+    - Test simplified publish flow
+    - Test exists() and getManifest() methods
+    - _Requirements: 6.1, 6.2, 6.4, 6.5_
+
+- [x] 4. Rewrite resolver for closure resolution from index
+  - [x] 4.1 Remove old resolver implementation
+    - Remove resolve(ref) method for latest version lookup
+    - Remove resolveDependencies(manifest) method
+    - Keep only index-based resolution
+    - _Requirements: 4.1, 4.2, 4.3_
+  - [x] 4.2 Implement resolveClosureFromIndex method
+    - Load project index from `.spectrl/spectrl-index.json`
+    - Extract all keys as roots, sort lexicographically
+    - Implement BFS traversal with visited set
+    - Parse name@version from each key
+    - Read manifest from source URL (file:// in MVP)
+    - Validate manifest name/version matches key
+    - Extract deps from manifest, convert to name@version format
+    - Sort deps lexicographically before enqueuing
+    - Verify each dep exists in index
+    - Return sorted array of ResolvedNode objects
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 9.1, 9.2, 9.3, 9.4_
+  - [x] 4.3 Implement error handling
+    - Invalid index key → exit code 1
+    - Missing source → exit code 1
+    - Manifest mismatch → exit code 1
+    - Missing dependency → exit code 3 with helpful message
+    - Cycle detection → exit code 3
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [x] 4.4 Implement readManifestFromSource helper
+    - Parse file:// URLs to filesystem paths
+    - Read spectrl.json from source directory
+    - Validate manifest with Zod schema
+    - Return parsed Manifest object
+    - _Requirements: 4.1, 4.2_
+  - [x] 4.5 Write unit tests for resolver
+    - Test closure resolution with transitives
+    - Test BFS ordering
+    - Test lexicographic sorting of deps
+    - Test error cases (missing dep, cycle, mismatch)
+    - Test with fixture index files
+    - _Requirements: 4.4, 4.5, 4.6, 9.1, 9.2, 9.3_
+
+- [x] 5. Update CLI init command
+  - [x] 5.1 Change init to create project index
+    - Create `.spectrl/` directory
+    - Create `.spectrl/spectrl-index.json` with empty object `{}`
+    - Remove spectrl.json creation (that's for individual specs)
+    - Update success message
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+  - [x] 5.2 Update unit tests for init
+    - Test creates .spectrl directory
+    - Test creates spectrl-index.json with empty object
+    - Test error when file exists
+    - _Requirements: 1.1, 1.2, 1.3_
+
+- [x] 6. Update CLI publish command
+  - [x] 6.1 Update publish to use new hash format
+    - Keep using computeHash function
+    - Expect sha256: prefix in output
+    - Update registry path expectations
+    - Remove any index modification logic
+    - _Requirements: 3.1, 3.2, 3.9, 3.10, 3.11, 3.12_
+  - [x] 6.2 Update unit tests for publish
+    - Test hash format with sha256: prefix
+    - Test registry structure at {name}/{version}/
+    - Test no modification of project index
+    - _Requirements: 3.1, 3.9_
+
+- [x] 7. Rewrite CLI install command for new workflow
+  - [x] 7.1 Implement three-step install process
+    - Step 1: Call resolveClosureFromIndex to get all nodes
+    - Step 2: For each node, compute hash and materialize to registry
+    - Step 3: Write lock file with all entries
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12_
+  - [x] 7.2 Implement hash computation and verification
+    - Read manifest and files from source
+    - Compute SHA-256 hash
+    - Check if spec exists in registry
+    - If exists, verify hash matches (fail on mismatch)
+    - If not exists or matches, materialize to registry
+    - _Requirements: 4.11, 4.12, 8.2, 8.3, 8.4, 8.5_
+  - [x] 7.3 Implement lock file writing
+    - Create LockFile object with ISO-8601 timestamp
+    - Add LockEntry for each resolved node with hash
+    - Sort entries by name@version for determinism
+    - Write to `.spectrl/lock.json` with pretty formatting
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.8, 7.9_
+  - [x] 7.4 Remove old install logic
+    - Remove spec reference parameter
+    - Remove index path option
+    - Remove add-to-deps logic
+    - Simplify to just read index, resolve, install, lock
+    - _Requirements: 4.1, 4.2, 4.3_
+  - [x] 7.5 Write unit tests for install
+    - Test full workflow with fixtures
+    - Test hash verification
+    - Test lock file generation
+    - Test skip already installed with matching hash
+    - Test error on hash mismatch
+    - _Requirements: 4.1, 4.4, 4.9, 4.10, 4.11, 4.12_
+
+- [ ] 8. Update CLI entry point
+  - [x] 8.1 Simplify command routing
+    - Remove --index flag from install
+    - Remove spec reference argument from install
+    - Keep simple init, publish, install commands
+    - Update error handling for new exit codes
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
+  - [x] 8.2 Update CLI tests
+    - Test command routing
+    - Test error handling with new exit codes
+    - Test output formatting
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+
+- [x] 9. Create example fixtures for testing
+  - [x] 9.1 Create sample specs with dependencies
+    - Create base-spec with no dependencies
+    - Create app-spec that depends on base-spec
+    - Create lib-spec that depends on base-spec
+    - Include spectrl.json manifests with deps object
+    - Include sample files for each spec
+    - _Requirements: All (test support)_
+  - [x] 9.2 Create sample project index files
+    - Create index with single spec
+    - Create index with spec and transitive deps
+    - Create index with missing dependency (for error testing)
+    - Create index with cycle (for error testing)
+    - _Requirements: 5.1, 5.2, 5.3, 9.1, 9.2, 9.3_
+  - [x] 9.3 Create golden lock files
+    - Generate expected lock files for test scenarios
+    - Include deterministic ordering
+    - Include correct hash format
+    - Store in packages/examples/golden/
+    - _Requirements: 7.1, 7.2, 7.3, 7.9, 8.6, 8.7_
+
+- [x] 10. Set up end-to-end tests
+  - [x] 10.1 Create e2e test infrastructure
+    - Set up test utilities for temp directories
+    - Create helpers for executing CLI commands
+    - Create helpers for file system assertions
+    - Configure vitest for e2e tests in tests/e2e/
+    - _Requirements: All (test support)_
+  - [x] 10.2 Write e2e test for init workflow
+    - Test spectrl init creates .spectrl directory
+    - Test creates spectrl-index.json with empty object
+    - Test error when index already exists
+    - _Requirements: 1.1, 1.2, 1.3, 1.4_
+  - [x] 10.3 Write e2e test for publish workflow
+    - Create spec with spectrl.json and files
+    - Test spectrl publish writes to registry
+    - Verify registry structure at {name}/{version}/
+    - Verify hash is computed and stored with sha256: prefix
+    - Test validation errors
+    - _Requirements: 3.1, 3.2, 3.6, 6.1, 6.2, 6.3_
+  - [x] 10.4 Write e2e test for install workflow with transitives
+    - Create two specs: base-spec and app-spec (depends on base)
+    - Publish both to registry
+    - Create project index with both specs listed
+    - Test spectrl install resolves closure
+    - Verify both specs installed to registry
+    - Verify lock file contains both entries with hashes
+    - Verify lock entries are sorted
+    - Test skip already installed
+    - _Requirements: 4.1, 4.4, 4.7, 4.8, 4.9, 4.10, 7.1, 7.9, 8.6_
+  - [x] 10.5 Write e2e test for error scenarios
+    - Test missing dependency error with helpful message
+    - Test manifest mismatch error
+    - Test hash mismatch error (integrity breach)
+    - Test cycle detection error
+    - Verify exit codes (1 for validation, 2 for I/O, 3 for resolution)
+    - Verify error messages on stderr
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [x] 10.6 Write e2e test for determinism
+    - Run install twice with same inputs
+    - Verify identical lock files
+    - Verify identical registry structure
+    - Verify identical hashes
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9_
+
+- [x] 11. Update documentation
+  - [x] 11.1 Update README with new architecture
+    - Document .spectrl/spectrl-index.json format
+    - Document .spectrl/lock.json format
+    - Document registry structure at ~/.spectrl/registry/{name}/{version}/
+    - Update CLI command examples
+    - Remove references to ranges, catalogs, blob storage
+    - _Requirements: All_
+  - [x] 11.2 Add examples to documentation
+    - Show example project index with transitives
+    - Show example lock file
+    - Show example workflow: init → publish → install
+    - Document error messages and how to fix them
+    - _Requirements: All_
+  - [x] 11.3 Update design doc references
+    - Ensure consistency with implementation
+    - Update any outdated terminology
+    - Add notes about future extensibility
+    - _Requirements: All_
+
+- [x] 12. Validate build and distribution
+  - [x] 12.1 Verify CLI binary compilation
+    - Ensure TypeScript compiles without errors
+    - Verify shebang is preserved in dist/cli.js
+    - Test that dist/cli.js is executable
+    - Verify all imports resolve correctly in compiled output
+    - _Requirements: All (distribution support)_
+  - [x] 12.2 Test local CLI installation
+    - Run `pnpm install` from root to link packages
+    - Test running `spectrl` command from any directory
+    - Verify all three commands work (init, publish, install)
+    - Test with actual fixtures to ensure end-to-end functionality
+    - _Requirements: All (distribution support)_
+  - [x] 12.3 Validate package.json configuration
+    - Verify bin field points to correct entry point
+    - Ensure all dependencies are listed correctly
+    - Check that workspace dependencies use workspace:\* protocol
+    - Verify exports field if needed for ESM
+    - _Requirements: All (distribution support)_
+  - [x] 12.4 Test npm pack and installation
+    - Run `npm pack` in cli package to create tarball
+    - Install tarball in a separate directory
+    - Verify spectrl command is available globally
+    - Test all commands work after installation
+    - _Requirements: All (distribution support)_
+  - [x] 12.5 Document installation instructions
+    - Add installation steps to README
+    - Document how to install from npm (future)
+    - Document how to install from source
+    - Add troubleshooting section for common issues
+    - _Requirements: All (distribution support)_

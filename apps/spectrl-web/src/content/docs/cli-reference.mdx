@@ -1,0 +1,174 @@
+---
+title: 'CLI Reference'
+order: 4
+---
+
+# CLI Reference
+
+Every command spectrl supports.
+
+## spectrl init
+
+Initialize a new project with a spec index. Creates the `.spectrl/` folder and optionally sets up `AGENTS.md`.
+
+```bash
+npx spectrl init
+```
+
+| Flag           | Description                                   |
+| -------------- | --------------------------------------------- |
+| --skip-agents  | Skip AGENTS.md creation/update entirely       |
+| --force-agents | Force overwrite AGENTS.md with fresh template |
+
+You usually don't need to run this manually - `spectrl install` will initialize the project for you if it hasn't been set up yet.
+
+## spectrl new
+
+Scaffold a new spec or power in the current directory.
+
+```bash
+npx spectrl new spec <name>
+npx spectrl new power <name>
+npx spectrl new <name>        # defaults to spec
+```
+
+| Argument | Description                         |
+| -------- | ----------------------------------- |
+| name     | Lowercase alphanumeric with hyphens |
+
+**Examples:**
+
+```bash
+# Create a new spec (static context document)
+npx spectrl new spec my-api-design
+
+# Create a new power (behavioral instructions)
+npx spectrl new power code-review-checklist
+
+# Shorthand - creates a spec by default
+npx spectrl new my-api-design
+```
+
+Each command creates a directory with a `spectrl.jsonc` manifest and an `index.md` file. The manifest includes inline comments guiding you to fill in `description` (required for publishing) and `agent` metadata (recommended for discoverability).
+
+Powers get an `index.md` pre-populated with a "When to Use / Instructions" template. Specs get a blank `index.md`.
+
+## spectrl install
+
+Install a single spec, or restore all specs from the project index.
+
+```bash
+npx spectrl install <author/name>[@<version>]
+npx spectrl install                            # restore all from index
+```
+
+When run without arguments, it reads `.spectrl/spectrl-index.json` and installs everything listed - like `npm install` with no arguments.
+
+If the project hasn't been initialized yet, this creates the `.spectrl/` folder automatically.
+
+**Examples:**
+
+```bash
+npx spectrl install spectrl/api-design-standard
+npx spectrl install spectrl/api-design-standard@2.1.0
+npx spectrl install   # restore all specs from project index
+```
+
+## spectrl publish
+
+Publish a spec or power to the local or public registry. The CLI will prompt you to choose a destination.
+
+```bash
+npx spectrl publish
+```
+
+The content is hashed before upload. If the hash matches an existing version, the publish is skipped.
+
+**Required fields before publishing:**
+
+- `description` - must be present and non-empty in the manifest
+- `files` - must include `index.md`
+
+**Recommended fields** (warnings shown if missing, publish still proceeds):
+
+- `agent.purpose` - helps agents discover when to use this content
+- `agent.tags` - keywords for search and filtering
+
+The `type` field in the manifest (`"spec"` or `"power"`) is stored in the registry and used for filtering. If omitted, it defaults to `"spec"`.
+
+## spectrl list
+
+List installed specs and powers.
+
+```bash
+npx spectrl list
+```
+
+## spectrl search
+
+Search the public registry.
+
+```bash
+npx spectrl search <query>
+```
+
+## spectrl info
+
+Get info about a published spec.
+
+```bash
+npx spectrl info <author/name>
+```
+
+## spectrl update
+
+Check for and install updates for public specs.
+
+```bash
+npx spectrl update                     # show available updates
+npx spectrl update <author/name>       # update a specific spec
+npx spectrl update --all               # update all specs
+```
+
+## spectrl login
+
+Authenticate with GitHub using Device Flow. Required for publishing to the public registry.
+
+```bash
+npx spectrl login
+```
+
+Your token is stored securely in your OS keychain - Keychain on macOS, libsecret on Linux, and Credential Manager on Windows. If the keychain is unavailable, the token is stored in an encrypted file instead.
+
+## spectrl logout
+
+Remove your stored GitHub authentication token.
+
+```bash
+npx spectrl logout
+```
+
+## spectrl whoami
+
+Show the currently authenticated GitHub user.
+
+```bash
+npx spectrl whoami
+```
+
+## spectrl unpublish
+
+Remove a spec version from the public registry.
+
+```bash
+npx spectrl unpublish <author/name@version>
+```
+
+## Global flags
+
+These flags are available on all commands:
+
+| Flag      | Description  |
+| --------- | ------------ |
+| --help    | Show help    |
+| --version | Show version |

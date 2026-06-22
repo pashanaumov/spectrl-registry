@@ -1,0 +1,56 @@
+---
+title: 'Security & Trust'
+order: 6
+---
+
+# Security & Trust
+
+Honest answers to a few fair questions: how safe are specs, and how transparent is the CLI?
+
+## Specs are documents, not code
+
+The most important thing to understand: **specs and powers are inert content** - markdown and JSON. They don't execute. There are no `postinstall` scripts, no lifecycle hooks, no code that runs when you install a spec.
+
+This is a fundamentally different risk profile from `npm`, `pip`, or `cargo`, where installing a package can run arbitrary code on your machine. With `spectrl`, the worst case is a misleading document - the same risk as reading any page on the internet.
+
+## Prompt injection
+
+> If you feed a spec to an LLM, could it contain instructions that trick the model into doing something unintended?
+
+In theory, yes - but that's true of any text you give to an LLM. A Stack Overflow answer, a blog post, a README, or a spec can all contain malicious instructions.
+
+Spectrl is a distribution mechanism, not an execution environment - the same judgment you'd apply to any content applies here: **read it before you use it**.
+
+A few things that _hopefully_ help:
+
+- **Content hashing** - every spec version is SHA-256 hashed at publish time and verified on install. You know a spec hasn't been tampered with after you first installed it.
+- **Pinned versions** - your lock file pins exact versions with their hashes, so `spectrl install` always restores the same content.
+- **Human-readable format** - specs are plain text files you can open and read. There's nothing hidden.
+- **Inspect what you installed** - everything lives in `.spectrl/specs/` in your project. Open any file, read it, `grep` it - it's just markdown and JSON.
+
+## What the CLI does (and doesn't do)
+
+The CLI is a straightforward file manager. Here's exactly what it does:
+
+- **Reads and writes files** in your project's `.spectrl/` directory and the local registry at `~/.spectrl/registry/`
+- **Makes HTTPS requests** to the remote registry when you search, install from, or publish to the public registry
+- **Authenticates via GitHub** Device Flow when you run `spectrl login`
+
+What it doesn't do:
+
+- No telemetry or analytics
+- No background processes
+- No code execution - it never runs the content of a spec
+- No access to files outside `.spectrl/` and the registry directory (except creating `AGENTS.md` on first install)
+
+## CLI transparency
+
+The CLI is bundled and minified for distribution, so the npm package isn't a casual read. But its behavior is fully observable - it only touches `.spectrl/` in your project and `~/.spectrl/` on your machine. You can verify this with any process monitoring tool, or by watching filesystem and network activity while it runs.
+
+## Registry identity
+
+Every spec on the public registry is tied to a GitHub account. When you run `spectrl login`, you authenticate through GitHub's Device Flow - the same OAuth mechanism used by the GitHub CLI. Published specs are namespaced under your GitHub username (e.g., `alice/api-design`), so authorship is always visible.
+
+This also acts as a barrier to malicious actors - you can't publish anonymously. Every spec is traceable to a real GitHub account with its own reputation and history.
+
+For now, the combination of content hashing, GitHub identity, and plain-text readability gives you a solid foundation to evaluate what you're installing.

@@ -1,0 +1,111 @@
+---
+title: 'Getting Started'
+order: 2
+---
+
+# Getting Started
+
+Up and running in about a minute.
+
+## Prerequisites
+
+Node.js 18 or later
+
+## Quick start
+
+### 1. Run the CLI
+
+```bash
+npx spectrl --version
+```
+
+Or install globally if you prefer:
+
+```bash
+npm install -g spectrl
+```
+
+### 2. Install a spec
+
+Navigate to your project and run:
+
+```bash
+npx spectrl install spectrl/api-design-standard
+```
+
+If your project doesn't have a `.spectrl/` folder yet, the CLI creates one automatically. Dependencies resolve, everything lands in `.spectrl/specs/`.
+
+### 3. See what you have
+
+```bash
+npx spectrl list
+```
+
+Output:
+
+```
+spectrl/api-design-standard@2.1.0
+```
+
+## Project structure
+
+After your first install:
+
+```bash
+my-project/
+├── AGENTS.md                  # Instructions for AI agents (opt-in)
+├── .spectrl/                  # Auto-created on first install
+│   ├── spectrl-index.json     # Project index (like package.json)
+│   ├── catalog.md             # Human/agent-readable summary of installed content
+│   └── specs/                 # Installed specs (gitignored, restored by spectrl install)
+│       └── api-design-standard@2.1.0/
+│           └── index.md
+```
+
+## Agent integration
+
+When you run `spectrl install` for the first time, the CLI creates (or appends to) an `AGENTS.md` file in your project root. This is the default method for connecting your specs and powers to AI coding agents.
+
+`AGENTS.md` instructs agents to:
+
+1. Read `.spectrl/catalog.md` to discover what's installed
+2. Lazy-load only the specs and powers relevant to the current task
+3. Treat specs as context and powers as step-by-step instructions
+
+Most agents - including Cursor, Windsurf, and Claude Code - pick up `AGENTS.md` automatically. You don't need to do anything extra.
+
+During initialization, the CLI will ask whether you'd like to create `AGENTS.md`. If you'd rather manage context manually, you can opt out at that step (or pass `--skip-agents` to `spectrl init`) and append spec content to your own prompt files or agent configurations.
+
+> **GitHub Copilot users:** Copilot might not automatically read `AGENTS.md`. As a workaround, create a `.github/copilot-instructions.md` file and add an instruction telling Copilot to read `AGENTS.md`. For example:
+>
+> ```
+> Read the AGENTS.md file in the project root and follow the instructions there.
+> ```
+
+## Publishing
+
+You can publish specs and powers locally (just for your project) or to the public registry.
+
+First, scaffold your content:
+
+```bash
+# Create a spec (static context document)
+npx spectrl new spec my-api-design
+
+# Create a power (behavioral instructions)
+npx spectrl new power code-review-checklist
+```
+
+Then publish - the CLI will ask whether you want to publish locally or to the public registry:
+
+```bash
+npx spectrl publish
+```
+
+Before publishing, make sure your manifest has a `description` field and your `files` array includes `index.md` - both are required.
+
+## Next steps
+
+- Check the [CLI Reference](/docs/cli-reference) for all commands
+- Read the [Recipes](/docs/recipes) for step-by-step guides on creating and publishing
+- [Browse specs](/specs) others have published

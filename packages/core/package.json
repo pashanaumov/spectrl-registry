@@ -1,0 +1,52 @@
+{
+  "name": "@spectrl/core",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Core registry and dependency resolution logic for Spectrl",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "dev": "tsc --watch",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "spectrl",
+    "registry",
+    "dependency-resolution",
+    "local-first",
+    "spec",
+    "package-manager"
+  ],
+  "author": "Pasha Naumov",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@spectrl/schema": "workspace:*",
+    "fs-extra": "^11.2.0",
+    "jsonc-parse": "^2.0.0",
+    "proper-lockfile": "^4.1.2",
+    "semver": "^7.7.3"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/semver": "^7.7.1",
+    "fast-check": "^4.5.3"
+  }
+}

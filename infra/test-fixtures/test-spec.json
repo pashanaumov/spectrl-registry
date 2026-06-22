@@ -1,0 +1,17 @@
+{
+  "manifest": {
+    "name": "test-spec",
+    "version": "1.0.0",
+    "type": "spec",
+    "description": "Test spec for integration testing",
+    "files": ["README.md", "docs/guide.md"],
+    "agent": {
+      "purpose": "Testing the Spectrl API",
+      "tags": ["test", "integration", "example"]
+    }
+  },
+  "files": {
+    "README.md": "# Test Spec\n\nThis is a test spec for integration testing.\n",
+    "docs/guide.md": "# Guide\n\nThis is a test guide document.\n"
+  }
+}

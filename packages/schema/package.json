@@ -1,0 +1,43 @@
+{
+  "name": "@spectrl/schema",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Zod schemas and TypeScript types for Spectrl spec manifests",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "dev": "tsc --watch",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "spectrl",
+    "schema",
+    "zod",
+    "validation",
+    "types",
+    "spec",
+    "manifest"
+  ],
+  "author": "Pasha Naumov",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "fast-check": "^4.5.3"
+  }
+}

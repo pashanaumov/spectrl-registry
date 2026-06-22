@@ -1,0 +1,5 @@
+{
+  "app-spec@1.0.0": {
+    "source": "file:../../specs/app-spec"
+  }
+}

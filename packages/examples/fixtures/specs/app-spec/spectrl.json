@@ -1,0 +1,8 @@
+{
+  "name": "app-spec",
+  "version": "1.0.0",
+  "deps": {
+    "base-spec": "1.0.0"
+  },
+  "files": ["docs/architecture.md", "docs/api.md"]
+}

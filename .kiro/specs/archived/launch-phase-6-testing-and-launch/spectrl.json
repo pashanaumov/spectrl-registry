@@ -1,0 +1,10 @@
+{
+  "name": "phase-6-testing-and-launch",
+  "version": "0.1.0",
+  "description": "Testing, beta program, launch preparation, and public launch execution",
+  "files": ["requirements.md", "tasks.md"],
+  "dependencies": {
+    "phase-4-website": "0.1.0",
+    "phase-5-content-creation": "0.1.0"
+  }
+}

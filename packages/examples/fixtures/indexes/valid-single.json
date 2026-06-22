@@ -1,0 +1,5 @@
+{
+  "base-spec@1.0.0": {
+    "source": "file:../../specs/base-spec"
+  }
+}

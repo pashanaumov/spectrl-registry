@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs", // Lambda needs CommonJS
+    "rootDir": ".", // Functions are at root level
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true
+  },
+  "include": ["**/*.ts"], // Include all TypeScript files
+  "exclude": ["node_modules", "dist"]
+}

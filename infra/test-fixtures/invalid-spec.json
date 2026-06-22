@@ -1,0 +1,9 @@
+{
+  "manifest": {
+    "name": "invalid-spec",
+    "version": "not-semver",
+    "description": "Invalid spec for error testing",
+    "files": []
+  },
+  "files": {}
+}

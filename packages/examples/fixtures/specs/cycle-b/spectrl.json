@@ -1,0 +1,8 @@
+{
+  "name": "cycle-b",
+  "version": "1.0.0",
+  "deps": {
+    "cycle-a": "1.0.0"
+  },
+  "files": ["README.md"]
+}

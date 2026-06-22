@@ -1,0 +1,221 @@
+---
+title: 'Recipes'
+order: 5
+---
+
+# Recipes
+
+Step-by-step walkthroughs for common spectrl workflows.
+
+## Recipe 1: Create and publish a spec locally
+
+Specs are static context documents - architecture decisions, API contracts, testing philosophies. Things an agent reads for background knowledge.
+
+### Step 1: Scaffold
+
+```bash
+npx spectrl new spec api-design-standard
+```
+
+This creates a directory with a `spectrl.jsonc` manifest and a blank `index.md`.
+
+### Step 2: Write your content
+
+Open `api-design-standard/index.md` and write the document. This is the main file agents will read. Keep it focused on a single topic.
+
+### Step 3: Fill in the manifest
+
+Open `api-design-standard/spectrl.jsonc` and fill in the commented-out fields:
+
+```jsonc
+{
+  "name": "api-design-standard",
+  "version": "0.1.0",
+  "type": "spec",
+  "description": "REST API design conventions for our backend services",
+  "files": ["index.md"],
+  "deps": {},
+  "agent": {
+    "purpose": "Consult when designing or reviewing REST API endpoints",
+    "tags": ["api", "rest", "design", "conventions"],
+  },
+}
+```
+
+### Step 4: Publish locally
+
+```bash
+npx spectrl publish
+```
+
+The spec is now versioned and hashed in your local registry at `~/.spectrl/registry/`. Install it in any project with `npx spectrl install api-design-standard`. The `username/` prefix is only needed for public specs.
+
+No login required - local publishing works without an account.
+
+---
+
+## Recipe 2: Create and publish a power locally
+
+Powers are behavioral instructions - step-by-step workflows an agent follows when performing a task.
+
+### Step 1: Scaffold
+
+```bash
+npx spectrl new power code-review-checklist
+```
+
+This creates a directory with a `spectrl.jsonc` manifest and an `index.md` pre-populated with a template.
+
+### Step 2: Write your instructions
+
+Open `code-review-checklist/index.md`. The template gives you a starting structure:
+
+```markdown
+# Code Review Checklist
+
+## When to Use
+
+Follow this checklist when reviewing pull requests in any TypeScript project.
+
+## Instructions
+
+1. Check that all new functions have JSDoc comments
+2. Verify error handling covers edge cases
+3. Ensure no secrets or credentials are hardcoded
+4. Confirm tests cover the happy path and at least one failure case
+5. Look for unnecessary complexity - simpler is better
+```
+
+Powers work best when they're concrete and actionable. Write them like you're giving instructions to a capable colleague.
+
+### Step 3: Fill in the manifest
+
+```jsonc
+{
+  "name": "code-review-checklist",
+  "version": "0.1.0",
+  "type": "power",
+  "description": "Step-by-step code review checklist for TypeScript projects",
+  "files": ["index.md"],
+  "deps": {},
+  "agent": {
+    "purpose": "Follow during code reviews of TypeScript pull requests",
+    "tags": ["code-review", "typescript", "quality"],
+  },
+}
+```
+
+### Step 4: Publish locally
+
+```bash
+npx spectrl publish
+```
+
+---
+
+## Recipe 3: Publish to the public registry
+
+Once you're happy with your spec or power, share it with others. Run `publish` and choose "Public registry" when prompted:
+
+```bash
+npx spectrl publish
+```
+
+You'll need to be logged in with `spectrl login` first - publishing to the public registry requires a GitHub account. The CLI will prompt you to authenticate if you're not.
+
+Before publishing publicly, double-check:
+
+- `description` is filled in (required)
+- `files` includes `index.md` (required)
+- `agent.purpose` explains when to use it (recommended)
+- `agent.tags` has relevant keywords (recommended)
+
+---
+
+## What makes a good spec?
+
+A spec is reference material. Agents read it to understand context, not to follow instructions.
+
+**Do:**
+
+- Focus on a single topic (one API standard, one architecture decision, one testing philosophy)
+- Be specific - "Use UUIDs for resource IDs" is better than "Use good IDs"
+- Include rationale - explain _why_, not just _what_
+- Add examples that show the pattern in practice
+- Keep it concise - if it's longer than a few pages, consider splitting it
+
+**Don't:**
+
+- Write step-by-step instructions (that's what powers are for)
+- Mix unrelated topics in one spec
+- Leave it vague - "follow best practices" doesn't help anyone
+- Forget the `agent.purpose` field - it's how agents decide whether to load your spec
+
+**Good spec topics:** API design conventions, error handling patterns, database naming standards, ADR records, security policies, data model documentation.
+
+---
+
+## What makes a good power?
+
+A power is a set of instructions. Agents follow it step by step when performing a task.
+
+**Do:**
+
+- Start with a "When to Use" section so agents know when to activate it
+- Write numbered steps that are concrete and actionable
+- Be prescriptive - "Run `npm test` before committing" is better than "Make sure tests pass"
+- Include decision points - "If the function has more than 3 parameters, refactor to use an options object"
+- Keep each step small enough to verify independently
+
+**Don't:**
+
+- Write background context (that's what specs are for)
+- Leave steps ambiguous - "Review the code" isn't actionable
+- Assume context that isn't stated - be explicit about inputs and outputs
+- Create one giant power that covers everything - split by workflow
+
+**Good power topics:** code review checklists, PR merge workflows, incident response runbooks, deployment procedures, onboarding steps, refactoring playbooks.
+
+---
+
+## Spec or power? A quick test
+
+Ask yourself: "Is this something an agent should _know_ or something it should _do_?"
+
+- **Know** → spec (static context, reference material)
+- **Do** → power (behavioral instructions, step-by-step workflow)
+
+If you're unsure, start with a spec. You can always extract the actionable parts into a power later.
+
+---
+
+## Recipe 4: Gitignore installed specs
+
+The `.spectrl/specs/` directory is derived - it's restored by `spectrl install`, just like `node_modules/`. You should not commit it.
+
+### Per-project ignore
+
+Add this to your project's `.gitignore`:
+
+```bash
+.spectrl/specs/
+```
+
+Keep `spectrl-index.json` and `catalog.md` committed - they're how teammates restore the same specs.
+
+### Global ignore
+
+If you use spectrl across many projects, you can set up a [global gitignore](https://docs.github.com/en/get-started/git-basics/ignoring-files#configuring-ignored-files-for-all-repositories-on-your-computer) so you don't have to add the rule to every repo:
+
+```bash
+# Create or edit your global ignore file
+git config --global core.excludesFile ~/.config/git/ignore
+```
+
+Then add the rule:
+
+```bash
+echo '.spectrl/specs/' >> ~/.config/git/ignore
+```
+
+This applies to all repositories on your machine. See the [GitHub docs on ignoring files](https://docs.github.com/en/get-started/git-basics/ignoring-files) for more details.

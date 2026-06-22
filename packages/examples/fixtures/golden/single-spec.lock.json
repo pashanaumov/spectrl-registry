@@ -1,0 +1,12 @@
+{
+  "createdAt": "2025-11-07T00:00:00.000Z",
+  "entries": [
+    {
+      "name": "base-spec",
+      "version": "1.0.0",
+      "hash": "sha256:284fea7b6adadc89c52007a39d42a7876f88c6feb2bf0f24a89c7a623fdb6b4f",
+      "source": "file:../../specs/base-spec",
+      "deps": []
+    }
+  ]
+}

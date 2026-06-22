@@ -1,0 +1,16 @@
+{
+  "extends": "../../packages/schema/tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    { "path": "../../packages/schema" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/cli" }
+  ]
+}

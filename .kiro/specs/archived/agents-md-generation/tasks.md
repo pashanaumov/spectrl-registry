@@ -1,0 +1,118 @@
+# Implementation Plan: AGENTS.md Auto-Generation
+
+- [x] 1. Create template module with AGENTS.md content
+  - Create `packages/cli/src/agents/template.ts` with marker constant and template content
+  - Export `SPECTRL_MARKER`, `AGENTS_TEMPLATE`, `getNewFileContent()`, and `getAppendContent()` functions
+  - Template content should match the content from `__AGENTS.md` file
+  - _Requirements: 1.3, 1.4, 4.3, 4.4, 4.5, 7.1-7.15_
+
+- [x] 2. Create AGENTS.md manager module
+  - Create `packages/cli/src/agents/manager.ts` with file operation functions
+  - Implement `AgentsStatus` type (discriminated union for file states)
+  - Implement `checkAgentsStatus(cwd)` to detect file existence and marker presence
+  - Implement `createAgentsFile(cwd)` to create new AGENTS.md with marker as first line
+  - Implement `appendToAgentsFile(cwd)` to append Spectrl section with separator and marker
+  - Use existing error handling patterns with `CLIError` and appropriate exit codes
+  - Ensure atomic file operations (read entire file, modify in memory, write back)
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1-2.8, 4.1-4.12_
+
+- [x] 3. Add prompt utility to utils module
+  - Add `promptYesNo(message, defaultYes, options?)` function to `packages/cli/src/utils.ts`
+  - Accept optional `options` parameter with `yesLabel` and `noLabel` for custom choice labels
+  - Use `prompts` library for interactive selection with arrow key navigation
+  - Create 'select' prompt type with customizable choice labels (default "Yes" and "No")
+  - Set initial selection based on default value (0 for Yes, 1 for No)
+  - Return boolean for yes/no response, or undefined if cancelled (Ctrl+C)
+  - Import prompts with ESM syntax: `import prompts from 'prompts'`
+  - _Requirements: 1.4-1.9, 3.1-3.8_
+
+- [x] 4. Add CLI flags to init command
+  - Modify `packages/cli/src/cli.ts` to add `--skip-agents` and `--force-agents` flags to init command
+  - Use `flag` from `cmd-ts` with appropriate descriptions
+  - Pass flags to init function via options object
+  - _Requirements: 8.1, 9.1_
+
+- [x] 5. Integrate AGENTS.md logic into init command
+  - Modify `packages/cli/src/commands/init.ts` to accept `InitOptions` parameter
+  - Add flag conflict validation (error if both flags provided)
+  - Create `handleAgentsFile()` helper function to orchestrate AGENTS.md logic
+  - Implement skip logic for `--skip-agents` flag
+  - Implement force overwrite logic for `--force-agents` flag
+  - Implement default flow for new projects: prompt with "Yes (recommended)" and "No" options
+  - Implement default flow for existing files: prompt to append with "Yes (recommended)" and "No" options
+  - When user declines creation, log implications: "AI assistants won't automatically consult specs. You can create AGENTS.md manually later."
+  - When user declines append, log: "You can add Spectrl instructions manually if needed"
+  - Handle prompting with spinner management (stop before prompt, restart after)
+  - Implement non-critical error handling (log warnings, continue init)
+  - Add appropriate log messages for each operation outcome
+  - _Requirements: 1.1-1.19, 2.1-2.8, 3.1-3.8, 4.1-4.12, 5.1-5.10, 6.1-6.8, 8.1-8.9, 9.1-9.8_
+
+- [x] 6. Write unit tests for template module
+  - Create `packages/cli/src/agents/template.test.ts`
+  - Test `getNewFileContent()` returns marker as first line followed by template
+  - Test `getAppendContent()` returns separator, marker, and template
+  - Test marker constant is correctly defined
+  - _Requirements: 1.3, 1.4, 4.3, 4.4_
+
+- [x] 7. Write unit tests for manager module
+  - Create `packages/cli/src/agents/manager.test.ts`
+  - Test `checkAgentsStatus()` with non-existent file (returns `{ exists: false }`)
+  - Test `checkAgentsStatus()` with file containing marker (returns `{ exists: true, hasMarker: true }`)
+  - Test `checkAgentsStatus()` with file without marker (returns `{ exists: true, hasMarker: false }`)
+  - Test `checkAgentsStatus()` with unreadable file (treats as non-existent)
+  - Test `createAgentsFile()` creates file with correct content
+  - Test `createAgentsFile()` throws CLIError on write failure
+  - Test `appendToAgentsFile()` preserves existing content and appends correctly
+  - Test `appendToAgentsFile()` trims trailing whitespace before appending
+  - Test `appendToAgentsFile()` throws CLIError on read/write failure
+  - Use temporary directories for file operation tests
+  - _Requirements: 1.1-1.9, 2.1-2.8, 4.1-4.12_
+
+- [x] 8. Write unit tests for prompt utility
+  - Add tests to `packages/cli/src/utils.test.ts`
+  - Test `promptYesNo()` returns true when "Yes" is selected
+  - Test `promptYesNo()` returns false when "No" is selected
+  - Test `promptYesNo()` returns undefined when cancelled (Ctrl+C)
+  - Test default value sets correct initial selection (0 for Yes, 1 for No)
+  - Use `prompts.inject()` to programmatically provide test answers
+  - _Requirements: 3.3-3.8_
+
+- [x] 9. Write integration tests for init command
+  - Add tests to `packages/cli/src/commands/init.test.ts`
+  - Test init with no AGENTS.md prompts for creation (use `prompts.inject()` to accept)
+  - Test init with no AGENTS.md prompts for creation (use `prompts.inject()` to decline)
+  - Test init with no AGENTS.md shows "Yes (recommended)" as first choice
+  - Test declining creation shows implications message about AI assistants
+  - Test init with existing AGENTS.md without marker prompts to append (use `prompts.inject()` to accept)
+  - Test init with existing AGENTS.md without marker prompts to append (use `prompts.inject()` to decline)
+  - Test append prompt shows "Yes (recommended)" as first choice
+  - Test init with existing AGENTS.md without marker handles cancellation (inject undefined)
+  - Test init with existing AGENTS.md with marker is idempotent (no changes, no prompts)
+  - Test init with `--skip-agents` flag skips all AGENTS.md logic
+  - Test init with `--force-agents` flag overwrites existing file without prompting
+  - Test init with both flags throws validation error
+  - Test init continues successfully when AGENTS.md operations fail (non-critical)
+  - Test appropriate log messages for each scenario (including implications messages)
+  - Use temporary directories for integration tests
+  - _Requirements: 1.1-1.19, 2.1-2.8, 3.1-3.8, 4.1-4.12, 5.1-5.10, 6.1-6.8, 8.1-8.9, 9.1-9.8_
+
+- [x] 10. Manual testing and validation
+  - Test `spectrl init` in fresh directory (should prompt for creation)
+  - Verify creation prompt shows "Yes (recommended)" and "No" options
+  - Test selecting "Yes (recommended)" creates AGENTS.md
+  - Test selecting "No" shows implications message about AI assistants
+  - Test `spectrl init` with existing custom AGENTS.md (should show arrow-navigable append prompt)
+  - Verify append prompt shows "Yes (recommended)" and "No" options
+  - Test arrow key navigation in prompts (up/down to switch between options)
+  - Test selecting "Yes (recommended)" with Enter key (should create/append)
+  - Test selecting "No" with Enter key (should skip with helpful message)
+  - Test Ctrl+C during prompt (should skip gracefully with message)
+  - Test `spectrl init` again after append (should be idempotent)
+  - Test `spectrl init --skip-agents` (should skip AGENTS.md entirely, no prompts)
+  - Test `spectrl init --force-agents` (should overwrite without prompting)
+  - Test `spectrl init --skip-agents --force-agents` (should error)
+  - Verify AGENTS.md content matches template
+  - Verify marker placement is correct (first line for new, before template for append)
+  - Verify file encoding is UTF-8
+  - Verify all log messages are clear and helpful (especially implications messages)
+  - _Requirements: All functional requirements_

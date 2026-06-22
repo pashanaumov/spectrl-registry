@@ -1,0 +1,20 @@
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+.next/
+.turbo/
+
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Coverage
+coverage/
+
+# Minified files
+*.min.js
+*.min.css
+
+# Spectrl local registry
+.spectrl/

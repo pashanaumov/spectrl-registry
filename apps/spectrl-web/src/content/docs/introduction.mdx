@@ -1,0 +1,38 @@
+---
+title: 'Introduction'
+order: 1
+---
+
+# Introduction
+
+`spectrl` is a CLI and open registry for structured specs. If you've used npm or pip, you already know the mental model.
+
+## Specs and powers
+
+`spectrl` has two content types: **specs** and **powers**.
+
+**Specs** are static context documents - PRDs, TDDs, ADRs, API contracts, architecture decisions. Agents read specs for background knowledge when working on a task. Think of them as the "what and why" of your codebase.
+
+**Powers** are behavioral instructions - workflows, coding patterns, review checklists, best practices. Agents follow powers when performing tasks. Think of them as the "how" - step-by-step instructions an agent executes.
+
+Both are versioned, installable, and composable. The distinction matters for agent tooling: a spec informs, a power directs.
+
+## How it works
+
+- **Versioned** - Semver. Exact versions, pinned in your project index.
+- **Content-addressed** - Every version is hashed. Installs are byte-for-byte reproducible.
+- **Composable** - Specs can depend on other specs.
+- **Local or public** - Keep specs private to your repo, or publish to the registry for others to use.
+- **Agent-readable** - Structured enough for AI tools to parse and act on.
+
+## The social angle
+
+The public registry is where things get interesting. People publish their testing philosophies, preferred agent response styles, architecture templates. You can browse what others have shared and install the pieces that resonate with how you work.
+
+## What's next?
+
+- [Getting Started](/docs/getting-started) - up and running in a minute
+- [Installation](/docs/installation) - install options
+- [CLI Reference](/docs/cli-reference) - every command
+- [Recipes](/docs/recipes) - step-by-step guides for creating specs and powers
+- [Security & Trust](/docs/security) - how specs and the CLI handle safety

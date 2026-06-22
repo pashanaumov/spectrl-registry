@@ -1,0 +1,9 @@
+{
+  "name": "phase-5-content-creation",
+  "version": "0.1.0",
+  "description": "Create 40+ high-quality specs to seed the public registry",
+  "files": ["requirements.md", "tasks.md"],
+  "dependencies": {
+    "phase-3-cli-public-registry": "0.1.0"
+  }
+}

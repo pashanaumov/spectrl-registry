@@ -1,0 +1,19 @@
+{
+  "createdAt": "2025-11-07T00:00:00.000Z",
+  "entries": [
+    {
+      "name": "app-spec",
+      "version": "1.0.0",
+      "hash": "sha256:1e66a38fbf1c22c5e6645cf8756bd32faf0835ab6420810576c66d4d132fafb8",
+      "source": "file:../../specs/app-spec",
+      "deps": ["base-spec@1.0.0"]
+    },
+    {
+      "name": "base-spec",
+      "version": "1.0.0",
+      "hash": "sha256:284fea7b6adadc89c52007a39d42a7876f88c6feb2bf0f24a89c7a623fdb6b4f",
+      "source": "file:../../specs/base-spec",
+      "deps": []
+    }
+  ]
+}

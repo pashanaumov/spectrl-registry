@@ -1,0 +1,6 @@
+{
+  "name": "@spectrl/examples",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spec fixtures for e2e tests"
+}
