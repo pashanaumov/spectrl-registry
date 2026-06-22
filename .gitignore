@@ -61,3 +61,6 @@ override.tf.json
 infra/modules/lambda/builds/*.zip
 
 temp-docs/
+
+# Kiro IDE
+.kiro/
