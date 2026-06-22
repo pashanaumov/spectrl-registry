@@ -49,6 +49,3 @@ export async function handler(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
-
-import * as ff from '@google-cloud/functions-framework';
-ff.http('handler', handler);

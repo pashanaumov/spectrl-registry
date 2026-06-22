@@ -56,6 +56,3 @@ export async function handler(req: Request, res: Response): Promise<void> {
     res.status(statusCode).json(errorResponse);
   }
 }
-
-import * as ff from '@google-cloud/functions-framework';
-ff.http('handler', handler);

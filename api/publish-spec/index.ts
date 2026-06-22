@@ -83,7 +83,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
     res.status(200).json({
       message: `Published ${paths.specId}@${manifest.version}`,
-      url: `https://spectrl.pro/specs/${paths.specId}`,
+      url: `https://registry.spectrl.pro/specs/${paths.specId}`,
       specId: paths.specId,
       version: manifest.version,
     });
@@ -100,6 +100,3 @@ export async function handler(req: Request, res: Response): Promise<void> {
     res.status(statusCode).json({ error: errorMessage });
   }
 }
-
-import * as ff from '@google-cloud/functions-framework';
-ff.http('handler', handler);

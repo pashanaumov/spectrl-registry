@@ -253,7 +253,23 @@ pnpm format     # format with Prettier
 
 ## Infrastructure
 
-The public registry runs on AWS (Lambda + DynamoDB + S3 + CloudFront). See [infra/README.md](infra/README.md) for details.
+The public registry runs on GCP (Cloud Run + Firestore + Cloud Storage + Secret Manager). See [infra/README.md](infra/README.md) for details.
+
+### Deploying
+
+```bash
+./deploy.sh
+```
+
+### Architecture
+
+```
+api.spectrl.pro          → Cloud Run (spectrl-api) — Hono HTTP server
+registry.spectrl.pro     → Vercel (apps/spectrl-web) — Next.js frontend
+spectrl-specs-prod       → Cloud Storage — spec files (public read)
+Firestore (default)      → spec + user metadata
+Secret Manager           → GitHub OAuth credentials
+```
 
 ## License
 
