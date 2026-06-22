@@ -10,10 +10,6 @@ variable "bucket_name" {
   type = string
 }
 
-variable "source_bucket_name" {
-  type = string
-}
-
 variable "github_oauth_client_id_secret" {
   type = string
 }

@@ -41,7 +41,6 @@ module "functions" {
   project_id                        = var.project_id
   region                            = var.region
   bucket_name                       = module.storage.specs_bucket_name
-  source_bucket_name                = module.storage.functions_source_bucket_name
   github_oauth_client_id_secret     = module.secrets.github_oauth_client_id_secret_name
   github_oauth_client_secret_secret = module.secrets.github_oauth_client_secret_secret_name
 }
