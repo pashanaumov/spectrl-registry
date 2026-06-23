@@ -1,6 +1,6 @@
 {
   "name": "spectrl-registry",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first spec registry - CLI for managing versioned, composable structured documents",
   "type": "module",
   "bin": {
