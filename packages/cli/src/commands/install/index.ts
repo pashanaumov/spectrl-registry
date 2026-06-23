@@ -51,7 +51,7 @@ async function tryGenerateCatalog(cwd: string): Promise<void> {
  * @returns Registry URL from environment variable or default CloudFront URL
  */
 function getRegistryUrl(): string {
-  return process.env.REGISTRY_URL || 'https://d12j78i0x57g1k.cloudfront.net';
+  return process.env.REGISTRY_URL || 'https://storage.googleapis.com/spectrl-specs-prod';
 }
 
 /**

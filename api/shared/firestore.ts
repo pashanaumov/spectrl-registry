@@ -13,21 +13,26 @@ export async function getSpecVersions(specId: string): Promise<SpecVersion[]> {
   return snapshot.docs.map((doc) => doc.data() as SpecVersion);
 }
 
+// Encode specId+version into a safe Firestore document ID (no slashes)
+function docId(specId: string, version: string): string {
+  return `${specId.replace('/', '__')}__${version}`;
+}
+
 export async function storeSpecMetadata(metadata: SpecMetadata): Promise<void> {
-  await db.collection('specs').doc(`${metadata.specId}_${metadata.version}`).set(metadata);
+  await db.collection('specs').doc(docId(metadata.specId, metadata.version)).set(metadata);
 }
 
 export async function checkSpecExists(specId: string, version: string): Promise<boolean> {
-  const doc = await db.collection('specs').doc(`${specId}_${version}`).get();
+  const doc = await db.collection('specs').doc(docId(specId, version)).get();
   return doc.exists;
 }
 
 export async function deleteSpecMetadata(specId: string, version: string): Promise<void> {
-  await db.collection('specs').doc(`${specId}_${version}`).delete();
+  await db.collection('specs').doc(docId(specId, version)).delete();
 }
 
 export async function incrementDownloadCount(specId: string, version: string): Promise<number> {
-  const ref = db.collection('specs').doc(`${specId}_${version}`);
+  const ref = db.collection('specs').doc(docId(specId, version));
   return db.runTransaction(async (tx) => {
     const doc = await tx.get(ref);
     if (!doc.exists) throw new Error(`Spec version not found: ${specId}@${version}`);
@@ -98,7 +103,7 @@ export async function searchSpecs(params: {
     : undefined;
 
   return {
-    results: page.map(({ _path, ...d }) => d),
+    results: page.map(({ _path, createdAt, ...d }) => ({ ...d, publishedAt: createdAt })),
     count: results.length,
     nextToken: nextCursor,
     hasMore,

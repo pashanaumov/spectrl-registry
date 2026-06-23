@@ -117,8 +117,8 @@ describe(`Remote E2E — ${API_URL}`, () => {
     const installResult = await remoteCLI(['install', `${TEST_USERNAME}/${specName}`], installDir);
     expect(installResult.exitCode).toBe(0);
 
-    // Verify installed
-    const specPath = join(installDir, `.spectrl/specs/${specName}@${version}`);
+    // Verify installed (remote specs use username-specname@version path format)
+    const specPath = join(installDir, `.spectrl/specs/${TEST_USERNAME}-${specName}@${version}`);
     expect(await exists(specPath)).toBe(true);
 
     // 6. Unpublish
