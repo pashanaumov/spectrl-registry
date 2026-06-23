@@ -132,12 +132,12 @@ Verify the package:
 
 ```bash
 # Test with npx
-npx spectrl --version
+spr-registry --version
 
 # Or install globally and test
-npm install -g spectrl
+npm install -g spectrl-registry-registry
 spectrl --version
-npm uninstall -g spectrl
+npm uninstall -g spectrl-registry-registry
 ```
 
 ## npm Package Link

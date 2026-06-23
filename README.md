@@ -20,12 +20,12 @@ Spectrl treats structured documents (PRDs, TDDs, ADRs, API conventions, etc.) as
 
 ```bash
 # Use directly with npx (no install required)
-npx spectrl
+spr
 
 # Or install globally
-npm install -g spectrl
+npm install -g spectrl-registry-registry
 # or
-pnpm add -g spectrl
+pnpm add -g spectrl-registry
 ```
 
 ### From Source
@@ -46,7 +46,7 @@ cd packages/cli && npm link
 
 ```bash
 # Create a new spec
-npx spectrl new my-feature
+spr new my-feature
 
 # Add files and update the manifest
 cd my-feature
@@ -54,104 +54,104 @@ echo "# My Feature" > index.md
 # Edit spectrl.json to add "index.md" to the files array
 
 # Publish to local registry
-npx spectrl publish
+spr publish
 
 # Install from local registry
-npx spectrl install my-feature
+spr install my-feature
 
 # Or search and install from the public registry
-npx spectrl search api-design
-npx spectrl install alice/api-design
+spr search api-design
+spr install alice/api-design
 ```
 
 ## Commands
 
 ### Local Workflow
 
-| Command                  | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `spectrl new <name>`     | Scaffold a new spec directory with a manifest     |
-| `spectrl publish`        | Publish to local or public registry (interactive) |
-| `spectrl install [spec]` | Install all specs from index, or a specific spec  |
-| `spectrl list`           | Show all installed specs                          |
+| Command              | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `spr new <name>`     | Scaffold a new spec directory with a manifest     |
+| `spr publish`        | Publish to local or public registry (interactive) |
+| `spr install [spec]` | Install all specs from index, or a specific spec  |
+| `spr list`           | Show all installed specs                          |
 
 ### Public Registry
 
-| Command                        | Description                               |
-| ------------------------------ | ----------------------------------------- |
-| `spectrl login`                | Authenticate with GitHub (Device Flow)    |
-| `spectrl logout`               | Remove stored token                       |
-| `spectrl whoami`               | Show authenticated user                   |
-| `spectrl search <query>`       | Search the public registry                |
-| `spectrl info <username/spec>` | Show spec versions and metadata           |
-| `spectrl update [spec]`        | Check for and install updates             |
-| `spectrl unpublish <spec>`     | Remove a version from the public registry |
+| Command                    | Description                               |
+| -------------------------- | ----------------------------------------- |
+| `spr login`                | Authenticate with GitHub (Device Flow)    |
+| `spr logout`               | Remove stored token                       |
+| `spr whoami`               | Show authenticated user                   |
+| `spr search <query>`       | Search the public registry                |
+| `spr info <username/spec>` | Show spec versions and metadata           |
+| `spr update [spec]`        | Check for and install updates             |
+| `spr unpublish <spec>`     | Remove a version from the public registry |
 
-### `spectrl new`
+### `spr new`
 
 ```bash
-npx spectrl new <name> [--version <version>] [--description <desc>]
+spr new <name> [--version <version>] [--description <desc>]
 ```
 
 Creates a `{name}/` directory with a `spectrl.json` manifest. Name must be lowercase alphanumeric with hyphens.
 
 ```bash
-npx spectrl new user-auth --version 1.0.0 --description "User authentication spec"
+spr new user-auth --version 1.0.0 --description "User authentication spec"
 ```
 
-### `spectrl publish`
+### `spr publish`
 
 Prompts you to choose a destination:
 
 - **Local** (`~/.spectrl/registry/`) — private, no auth required
-- **Public** (`registry.spectrl.dev`) — requires `spectrl login`, `description` field required
+- **Public** (`registry.spectrl.dev`) — requires `spr login`, `description` field required
 
 ```bash
-npx spectrl publish
+spr publish
 # ? Where do you want to publish?
 # ❯ Local registry (~/.spectrl/registry/)
 #   Public registry (registry.spectrl.dev)
 ```
 
-### `spectrl install`
+### `spr install`
 
 **Bulk mode** — restore all specs from `.spectrl/spectrl-index.json` (like `npm install`):
 
 ```bash
-npx spectrl install
+spr install
 ```
 
 **Single spec from local registry:**
 
 ```bash
-npx spectrl install my-spec          # latest version
-npx spectrl install my-spec@1.0.0   # specific version
+spr install my-spec          # latest version
+spr install my-spec@1.0.0   # specific version
 ```
 
 **Single spec from public registry:**
 
 ```bash
-npx spectrl install alice/api-design
-npx spectrl install alice/api-design@2.0.0
+spr install alice/api-design
+spr install alice/api-design@2.0.0
 ```
 
 Installs create symlinks from `.spectrl/specs/{name}@{version}/` to the registry (junction points on Windows, with automatic fallback to file copy). The project index is updated automatically.
 
-### `spectrl update`
+### `spr update`
 
 ```bash
-npx spectrl update                    # show available updates
-npx spectrl update alice/api-design   # update specific spec
-npx spectrl update --all              # update all specs
+spr update                    # show available updates
+spr update alice/api-design   # update specific spec
+spr update --all              # update all specs
 ```
 
 Only works with public specs. Uses semver comparison to detect newer versions.
 
-### `spectrl search` / `spectrl info`
+### `spr search` / `spr info`
 
 ```bash
-npx spectrl search "authentication"
-npx spectrl info alice/user-auth
+spr search "authentication"
+spr info alice/user-auth
 ```
 
 ## How It Works
@@ -160,7 +160,7 @@ npx spectrl info alice/user-auth
 2. **Project Index** (`.spectrl/spectrl-index.json`): maps `name@version` keys to source locations — commit this
 3. **Lock File** (`.spectrl/lock.json`): pinned closure with SHA-256 hashes — commit this
 4. **Registry** (`~/.spectrl/registry/`): machine-wide store, shared across projects
-5. **Specs dir** (`.spectrl/specs/`): symlinks to registry — gitignored, restored by `spectrl install`
+5. **Specs dir** (`.spectrl/specs/`): symlinks to registry — gitignored, restored by `spr install`
 
 This mirrors npm's model: `spectrl-index.json` ≈ `package.json`, `lock.json` ≈ `package-lock.json`, `.spectrl/specs/` ≈ `node_modules/`.
 
@@ -201,19 +201,19 @@ Commit `.spectrl/spectrl-index.json` and `.spectrl/lock.json`. The `specs/` dire
 
 ```bash
 # Developer A: add a spec
-npx spectrl install alice/api-design@1.0.0
+spr install alice/api-design@1.0.0
 git add .spectrl/spectrl-index.json .spectrl/lock.json
 git commit -m "Add api-design spec"
 git push
 
 # Developer B: restore after pull
 git pull
-npx spectrl install   # installs everything from index
+spr install   # installs everything from index
 ```
 
 ## AGENTS.md
 
-When you run `spectrl install` for the first time, Spectrl creates (or appends to) an `AGENTS.md` file with instructions for AI assistants on how to discover and use installed specs. This is written once and never auto-updated.
+When you run `spr install` for the first time, Spectrl creates (or appends to) an `AGENTS.md` file with instructions for AI assistants on how to discover and use installed specs. This is written once and never auto-updated.
 
 ## Project Structure
 
@@ -247,9 +247,9 @@ pnpm format     # format with Prettier
 
 **`spectrl` not found after source install**: Run `cd packages/cli && npm link`, or use `node packages/cli/dist/cli.js` directly.
 
-**Hash mismatch**: The spec content changed after it was added to the index. Remove and reinstall: `rm -rf ~/.spectrl/registry/{name}/{version}` then `spectrl install {name}@{version}`.
+**Hash mismatch**: The spec content changed after it was added to the index. Remove and reinstall: `rm -rf ~/.spectrl/registry/{name}/{version}` then `spr install {name}@{version}`.
 
-**Missing dependency error**: All transitive dependencies must be listed in `.spectrl/spectrl-index.json`. Add the missing spec with `spectrl install {name}@{version}`.
+**Missing dependency error**: All transitive dependencies must be listed in `.spectrl/spectrl-index.json`. Add the missing spec with `spr install {name}@{version}`.
 
 ## Infrastructure
 
