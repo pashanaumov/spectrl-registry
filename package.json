@@ -8,6 +8,7 @@
     "dev": "pnpm -C packages/cli dev",
     "test": "pnpm -r test",
     "test:e2e": "pnpm -C tests/e2e test",
+    "test:remote": "API_URL=https://api.spectrl.pro pnpm --filter @spectrl/e2e-tests exec vitest run remote-smoke",
     "lint": "biome check .",
     "format": "prettier --write .",
     "version:patch": "pnpm -C packages/cli version:patch",

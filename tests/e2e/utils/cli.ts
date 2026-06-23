@@ -17,10 +17,15 @@ export interface CLIResult {
 /**
  * Executes the spectrl CLI command
  */
-export async function runCLI(args: string[], options: { cwd?: string } = {}): Promise<CLIResult> {
+export async function runCLI(
+  args: string[],
+  options: { cwd?: string; env?: Record<string, string>; input?: string } = {},
+): Promise<CLIResult> {
   try {
     const result = await execa('node', [CLI_PATH, ...args], {
       cwd: options.cwd,
+      env: { ...process.env, ...options.env },
+      input: options.input,
       reject: false,
     });
 
