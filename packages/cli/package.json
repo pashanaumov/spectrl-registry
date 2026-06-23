@@ -4,7 +4,7 @@
   "description": "Local-first spec registry - CLI for managing versioned, composable structured documents",
   "type": "module",
   "bin": {
-    "spr": "./dist/cli.js"
+    "spr": "dist/cli.js"
   },
   "exports": {
     "./dist/cli.js": "./dist/cli.js",
